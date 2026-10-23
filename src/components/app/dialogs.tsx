@@ -64,7 +64,7 @@ export function AddExpenseDialog({ trigger }: { trigger: ReactNode }) {
         <Field label="Amount (৳)"><Input required type="number" min={1} placeholder="0" className="h-11 rounded-xl text-lg font-bold" /></Field>
         <Field label="Date"><Input type="date" defaultValue="2026-10-23" className="h-11 rounded-xl" /></Field>
         <Field label="Category">
-          <Select key={type} defaultValue={cats[0]}>
+          <Select key={type} defaultValue={cats[0]!}>
             <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
             <SelectContent>{cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
