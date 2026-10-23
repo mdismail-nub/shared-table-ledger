@@ -33,7 +33,7 @@ function Brand() {
 export function AppShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [more, setMore] = useState(false);
-  const [month, setMonth] = useState(months[0]);
+  const [month, setMonth] = useState<string>(months[0]!);
   const active = (to: string) => (to === "/" ? path === "/" : path.startsWith(to));
   const current = nav.find((n) => active(n.to));
 
