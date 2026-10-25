@@ -16,7 +16,7 @@ export const Route = createFileRoute("/reports")({
 const tip = { borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", fontSize: 12 };
 
 function Page() {
-  const max = categoryBreakdown[0].value;
+  const max = categoryBreakdown[0]!.value;
   return (
     <div className="space-y-6">
       <PageIntro title="Reports" subtitle="Trends, breakdowns and exports."

@@ -19,7 +19,7 @@ const filters = ["All", "Active", "New", "Owes money"] as const;
 function Page() {
   const [q, setQ] = useState("");
   const [f, setF] = useState<(typeof filters)[number]>("All");
-  const [sel, setSel] = useState(ledger[0].id);
+  const [sel, setSel] = useState(ledger[0]!.id);
   const list = ledger.filter((m) => m.name.toLowerCase().includes(q.toLowerCase()) &&
     (f === "All" || (f === "Active" && m.status === "active") || (f === "New" && m.status === "new") || (f === "Owes money" && m.balance < 0)));
   const m = ledger.find((x) => x.id === sel)!;

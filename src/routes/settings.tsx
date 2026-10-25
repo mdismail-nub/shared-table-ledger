@@ -24,7 +24,7 @@ function Chips({ items, tone }: { items: string[]; tone: string }) {
 }
 
 function Toggle({ title, text, on }: { title: string; text: string; on?: boolean }) {
-  return <div className="flex items-center justify-between gap-4 py-3"><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{text}</p></div><Switch defaultChecked={on} /></div>;
+  return <div className="flex items-center justify-between gap-4 py-3"><div><p className="font-semibold">{title}</p><p className="text-xs text-muted-foreground">{text}</p></div><Switch defaultChecked={!!on} /></div>;
 }
 
 function Page() {

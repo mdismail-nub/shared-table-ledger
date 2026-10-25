@@ -20,7 +20,7 @@ type Row = Record<"b" | "l" | "d", number>;
 function Page() {
   const [day, setDay] = useState(25);
   const [rows, setRows] = useState<Record<string, Row>>(() => Object.fromEntries(members.map((m, i) => [m.id, { b: i % 3 ? 1 : 0, l: 1, d: 1 }])));
-  const set = (id: string, k: keyof Row, d: number) => setRows((r) => ({ ...r, [id]: { ...r[id], [k]: Math.max(0, Math.min(5, r[id][k] + d)) } }));
+  const set = (id: string, k: keyof Row, d: number) => setRows((r) => ({ ...r, [id]: { ...r[id]!, [k]: Math.max(0, Math.min(5, r[id]![k] + d)) } }));
   const dayTotal = Object.values(rows).reduce((s, r) => s + r.b + r.l + r.d, 0);
   const allOn = (k: keyof Row) => setRows((r) => Object.fromEntries(Object.entries(r).map(([id, v]) => [id, { ...v, [k]: 1 }])));
 
@@ -46,7 +46,7 @@ function Page() {
         </div>
         <div className="divide-y">
           {members.map((m) => {
-            const r = rows[m.id];
+            const r = rows[m.id]!;
             return (
               <div key={m.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
                 <div className="flex flex-1 items-center gap-3"><Avatar name={m.name} tone={m.tone} size="sm" /><div><p className="font-semibold">{m.name}</p><p className="text-xs text-muted-foreground">{r.b + r.l + r.d} meals today</p></div></div>
