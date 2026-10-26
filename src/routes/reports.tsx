@@ -25,7 +25,7 @@ function Page() {
         <Panel>
           <PanelHeader title="Six-month spending" subtitle="Food vs household" />
           <div className="h-64"><ResponsiveContainer><BarChart data={monthlyTrend}>
-            <CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} /><YAxis tickLine={false} axisLine={false} fontSize={12} width={44} />
+            <CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} /><YAxis tickLine={false} axisLine={false} fontSize={11} width={34} tickFormatter={(v: number) => `${v / 1000}k`} />
             <Tooltip contentStyle={tip} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
             <Bar dataKey="food" name="Food" fill="var(--chart-1)" radius={[6, 6, 0, 0]} /><Bar dataKey="household" name="Household" fill="var(--chart-4)" radius={[6, 6, 0, 0]} />
           </BarChart></ResponsiveContainer></div>
@@ -33,7 +33,7 @@ function Page() {
         <Panel>
           <PanelHeader title="Deposits trend" subtitle="Money collected per month" />
           <div className="h-64"><ResponsiveContainer><LineChart data={monthlyTrend}>
-            <CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} /><YAxis tickLine={false} axisLine={false} fontSize={12} width={44} />
+            <CartesianGrid vertical={false} stroke="var(--border)" /><XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} /><YAxis tickLine={false} axisLine={false} fontSize={11} width={34} tickFormatter={(v: number) => `${v / 1000}k`} />
             <Tooltip contentStyle={tip} /><Line dataKey="deposits" name="Deposits" stroke="var(--chart-5)" strokeWidth={3} dot={{ r: 4 }} />
           </LineChart></ResponsiveContainer></div>
         </Panel>

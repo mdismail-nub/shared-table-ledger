@@ -25,10 +25,10 @@ function Page() {
     <div className="space-y-6">
       <PageIntro title="Expenses" subtitle="Bazar purchases and household bills, kept separate."
         actions={<AddExpenseDialog trigger={<Button><Plus /> Add expense</Button>} />} />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <StatCard label="Meal / bazar" value={`৳${foodTotal.toLocaleString("en-IN")}`} icon={ShoppingBasket} tone="mint" hint="Used for the meal rate" />
         <StatCard label="Household bills" value={`৳${householdTotal.toLocaleString("en-IN")}`} icon={Home} tone="peach" hint="Split equally, not in meal rate" />
-        <StatCard label="Entries this month" value={String(expenses.length)} icon={Receipt} tone="primary" />
+        <div className="col-span-2 sm:col-span-1"><StatCard label="Entries this month" value={String(expenses.length)} icon={Receipt} tone="primary" /></div>
       </div>
       <Panel>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row">
