@@ -24,7 +24,7 @@ const months = ["October 2026", "September 2026", "August 2026", "July 2026"];
 function Brand() {
   return (
     <Link to="/" className="flex items-center gap-2.5">
-      <img src={logo.url} alt="" className="h-9 w-9 scale-[1.6] object-cover" />
+      <span className="h-9 w-9 shrink-0 overflow-hidden rounded-xl"><img src={logo.url} alt="" className="h-full w-full scale-[1.6] object-cover" /></span>
       <span className="text-lg font-extrabold tracking-tight">Mess Manager</span>
     </Link>
   );
@@ -62,7 +62,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
           <div className="mx-auto grid max-w-7xl grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="lg:hidden"><img src={logo.url} alt="Mess Manager" className="h-9 w-9 scale-[1.6] object-cover" /></div>
+              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl lg:hidden"><img src={logo.url} alt="Mess Manager" className="h-full w-full scale-[1.6] object-cover" /></div>
               <h1 className="truncate text-lg font-bold sm:text-xl">{current?.label ?? "Mess Manager"}</h1>
             </div>
             <div className="flex shrink-0 items-center gap-2">

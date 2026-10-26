@@ -14,7 +14,7 @@ const tones = {
 export type Tone = keyof typeof tones;
 
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("rounded-2xl border bg-card p-5 shadow-card", className)}>{children}</section>;
+  return <section className={cn("glass rounded-3xl p-4 sm:p-5", className)}>{children}</section>;
 }
 
 export function PanelHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
