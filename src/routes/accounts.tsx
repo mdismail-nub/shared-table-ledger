@@ -38,7 +38,23 @@ function Page() {
       </Panel>
       <Panel>
         <PanelHeader title="Member balances" subtitle="Balance = deposits − (meals × rate + shared bills)" />
-        <div className="overflow-x-auto">
+        <ul className="space-y-3 md:hidden">
+          {ledger.map((l) => (
+            <li key={l.id} className="rounded-2xl bg-secondary/70 p-4">
+              <div className="flex items-center gap-3">
+                <Avatar name={l.name} tone={l.tone} size="sm" />
+                <div className="min-w-0 flex-1"><p className="truncate font-semibold">{l.name}</p><p className="text-xs text-muted-foreground">{l.meals} meals</p></div>
+                <div className="text-right"><p className="text-lg font-extrabold"><Money value={l.balance} signed /></p><StatusBadge status={l.balance < 0 ? "Overdue" : "Credit"} /></div>
+              </div>
+              <dl className="mt-3 grid grid-cols-4 gap-2 border-t pt-3 text-xs">
+                {[["Meal cost", l.mealCost], ["Shared", l.shared], ["Due", l.due], ["Paid", l.deposits]].map(([k, v]) => (
+                  <div key={k as string} className="min-w-0"><dt className="text-muted-foreground">{k}</dt><dd className="truncate font-semibold"><Money value={v as number} /></dd></div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[640px] text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground">{["Member", "Meals", "Meal cost", "Shared", "Total due", "Deposited", "Balance", ""].map((h) => <th key={h} className="pb-3 font-semibold">{h}</th>)}</tr></thead>
             <tbody className="divide-y">
