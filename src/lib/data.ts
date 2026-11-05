@@ -45,9 +45,9 @@ export function useMe() {
         supabase.from("user_roles").select("role").eq("user_id", user.id),
         supabase.from("members").select("*").eq("user_id", user.id).maybeSingle(),
       ]);
-      const name = (user.user_metadata?.full_name as string) || (user.user_metadata?.name as string) || user.email || "You";
+      const name = (user.user_metadata?.["full_name"] as string) || (user.user_metadata?.["name"] as string) || user.email || "You";
       return {
-        user: { id: user.id, email: user.email ?? "", name, avatar: (user.user_metadata?.avatar_url as string) || "" },
+        user: { id: user.id, email: user.email ?? "", name, avatar: (user.user_metadata?.["avatar_url"] as string) || "" },
         isAdmin: !!roles?.some((r) => r.role === "admin"),
         member: (member as Member | null) ?? null,
       };

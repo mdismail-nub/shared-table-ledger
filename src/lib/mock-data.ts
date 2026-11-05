@@ -56,7 +56,7 @@ export const memberById = (id: string) => members.find((m) => m.id === id)!;
 export const totalMeals = members.reduce((s, m) => s + m.meals, 0);
 export const foodTotal = sumByType(expenses, "meal");
 export const householdTotal = sumByType(expenses, "household");
-export const rate = mealRate(expenses, totalMeals);
+export const rate = mealRate(foodTotal, totalMeals);
 export const depositTotal = members.reduce((s, m) => s + m.deposits, 0);
 export const sharedShare = householdTotal / members.length;
 
