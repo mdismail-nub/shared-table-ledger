@@ -25,3 +25,9 @@ export function buildLedger<T extends M>(members: T[], meals: Ml[], deposits: D[
 
 export const taka = (n: number, digits = 0) =>
   `৳${Math.abs(n).toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+
+export type ExpenseType = "meal" | "household";
+export interface Expense { id: string; date: string; type: ExpenseType; category: string; description: string; amount: number; memberId: string; method: string }
+export function sumByType(expenses: Expense[], type: ExpenseType) {
+  return expenses.filter((e) => e.type === type).reduce((s, e) => s + e.amount, 0);
+}
