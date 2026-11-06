@@ -170,6 +170,155 @@ export type Database = {
         }
         Relationships: []
       }
+      mess_expenses: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          date: string
+          description: string
+          id: string
+          member_id: string | null
+          mess_id: string
+          method: string
+          type: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          member_id?: string | null
+          mess_id?: string
+          method?: string
+          type: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          date?: string
+          description?: string
+          id?: string
+          member_id?: string | null
+          mess_id?: string
+          method?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mess_expenses_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "mess_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mess_expenses_mess_id_fkey"
+            columns: ["mess_id"]
+            isOneToOne: false
+            referencedRelation: "messes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mess_meals: {
+        Row: {
+          breakfast: number
+          date: string
+          dinner: number
+          id: string
+          lunch: number
+          member_id: string
+          mess_id: string
+        }
+        Insert: {
+          breakfast?: number
+          date: string
+          dinner?: number
+          id?: string
+          lunch?: number
+          member_id: string
+          mess_id?: string
+        }
+        Update: {
+          breakfast?: number
+          date?: string
+          dinner?: number
+          id?: string
+          lunch?: number
+          member_id?: string
+          mess_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mess_meals_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "mess_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mess_meals_mess_id_fkey"
+            columns: ["mess_id"]
+            isOneToOne: false
+            referencedRelation: "messes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mess_members: {
+        Row: {
+          created_at: string
+          id: string
+          joined: string
+          mess_id: string
+          name: string
+          phone: string
+          role: string
+          room: string
+          status: string
+          tone: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          joined?: string
+          mess_id?: string
+          name: string
+          phone?: string
+          role?: string
+          room?: string
+          status?: string
+          tone?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          joined?: string
+          mess_id?: string
+          name?: string
+          phone?: string
+          role?: string
+          room?: string
+          status?: string
+          tone?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mess_members_mess_id_fkey"
+            columns: ["mess_id"]
+            isOneToOne: false
+            referencedRelation: "messes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mess_settings: {
         Row: {
           address: string
@@ -203,6 +352,102 @@ export type Database = {
         }
         Relationships: []
       }
+      messes: {
+        Row: {
+          address: string
+          created_at: string
+          currency: string
+          household_categories: string[]
+          id: string
+          invite_code: string
+          manager: string
+          meal_categories: string[]
+          name: string
+          owner_id: string
+          show_invite_to_members: boolean
+          start_day: number
+        }
+        Insert: {
+          address?: string
+          created_at?: string
+          currency?: string
+          household_categories?: string[]
+          id?: string
+          invite_code: string
+          manager?: string
+          meal_categories?: string[]
+          name: string
+          owner_id: string
+          show_invite_to_members?: boolean
+          start_day?: number
+        }
+        Update: {
+          address?: string
+          created_at?: string
+          currency?: string
+          household_categories?: string[]
+          id?: string
+          invite_code?: string
+          manager?: string
+          meal_categories?: string[]
+          name?: string
+          owner_id?: string
+          show_invite_to_members?: boolean
+          start_day?: number
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          kind: string
+          member_id: string
+          mess_id: string
+          method: string
+          reference: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          id?: string
+          kind?: string
+          member_id: string
+          mess_id?: string
+          method?: string
+          reference?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          kind?: string
+          member_id?: string
+          mess_id?: string
+          method?: string
+          reference?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "mess_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_mess_id_fkey"
+            columns: ["mess_id"]
+            isOneToOne: false
+            referencedRelation: "messes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -226,6 +471,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_mess: {
+        Args: {
+          _address: string
+          _currency: string
+          _manager: string
+          _name: string
+          _start_day: number
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -233,9 +488,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_mess_admin: { Args: { _mess: string }; Returns: boolean }
       join_mess: { Args: { _code: string }; Returns: string }
+      join_mess_by_code: { Args: { _code: string }; Returns: Json }
+      mess_invite_code: { Args: never; Returns: string }
+      mess_month_summary: {
+        Args: { _end: string; _start: string }
+        Returns: Json
+      }
       month_summary: { Args: { _end: string; _start: string }; Returns: Json }
       my_member_id: { Args: never; Returns: string }
+      my_mess_id: { Args: never; Returns: string }
+      new_invite_code: { Args: never; Returns: string }
+      regenerate_invite_code: { Args: never; Returns: string }
     }
     Enums: {
       app_role: "admin" | "member"
