@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Member, Meal, Expense, Payment, Mess, Summary, NotificationItem } from "./data";
 import type { MessRecord, AdminAccount } from "./mess-store";
+import { publishMessToCloud, fetchMessFromCloudByCode, fetchMessFromCloudById } from "./cloud-sync";
 
 interface ServerDatabase {
   messes: Record<string, MessRecord>;
@@ -353,7 +354,6 @@ export async function serverLookupMessByCode(code: string) {
   if (!messId || !db.messes[messId]) {
     // Check cloud sync
     try {
-      const { fetchMessFromCloudByCode } = await import("./cloud-sync");
       const cloud = await fetchMessFromCloudByCode(clean);
       if (cloud) {
         db.messes[cloud.mess.id] = cloud;
@@ -463,7 +463,6 @@ export async function serverCreateMess(params: {
   writeDatabase(db);
 
   try {
-    const { publishMessToCloud } = await import("./cloud-sync");
     await publishMessToCloud(newRecord);
   } catch {
     // ignore
@@ -502,7 +501,6 @@ export async function serverGetWorkspace(params: {
 
   if (!messId || !db.messes[messId]) {
     try {
-      const { fetchMessFromCloudByCode, fetchMessFromCloudById } = await import("./cloud-sync");
       const cloud = params.code
         ? await fetchMessFromCloudByCode(params.code)
         : params.messId
@@ -608,11 +606,7 @@ export function serverSaveRecord(params: {
 
   writeDatabase(db);
 
-  import("./cloud-sync")
-    .then(({ publishMessToCloud }) => {
-      publishMessToCloud(record).catch(() => {});
-    })
-    .catch(() => {});
+  publishMessToCloud(record).catch(() => {});
 
   return { ok: true };
 }
@@ -628,7 +622,6 @@ export async function serverSyncMessRecord(record: MessRecord) {
   writeDatabase(db);
 
   try {
-    const { publishMessToCloud } = await import("./cloud-sync");
     await publishMessToCloud(record);
   } catch {
     // ignore

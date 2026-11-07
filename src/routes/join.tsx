@@ -51,7 +51,12 @@ function JoinMessPage() {
   const [busy, setBusy] = useState(false);
 
   // Invite state from URL or manual code
-  const [inviteData, setInviteData] = useState<InvitePayload | null>(null);
+  const [inviteData, setInviteData] = useState<InvitePayload | null>(() => {
+    if (typeof window !== "undefined") {
+      return parseInviteFromUrl(window.location.search);
+    }
+    return null;
+  });
   const [manualInput, setManualInput] = useState("");
 
   // Join form state
@@ -139,6 +144,25 @@ function JoinMessPage() {
         saveStoredMess(parsed.id, newRecord);
       }
 
+      // Try server function first to get latest members
+      import("@/lib/mess.functions")
+        .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: parsed.code } }))
+        .then((sRes) => {
+          if (sRes && sRes.members) {
+            const current = getStoredMess(parsed.id);
+            if (current) {
+              // merge server members if any
+              for (const sm of sRes.members) {
+                if (!current.members.some((m) => m.id === sm.id)) {
+                  current.members.push(sm as Member);
+                }
+              }
+              saveStoredMess(parsed.id, current);
+            }
+          }
+        })
+        .catch(() => {});
+
       // Try to fetch full record from cloud if available (to get any pre-added members)
       import("@/lib/cloud-sync")
         .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(parsed.code))
@@ -164,41 +188,66 @@ function JoinMessPage() {
     const clean = code.trim().replace(/\D/g, "").slice(0, 6);
     if (clean.length !== 6) return;
 
-    const local = findMessByInviteCode(clean);
-    if (local) {
-      setInviteData({
-        id: local.mess.id,
-        name: local.mess.name,
-        manager: local.mess.manager,
-        code: clean,
-        currency: local.mess.currency,
-        timestamp: Date.now(),
-      });
-      toast.success(`Mess found: ${local.mess.name}`);
-    } else {
-      // Try cloud lookup
-      import("@/lib/cloud-sync")
-        .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(clean))
-        .then((cloud) => {
-          if (cloud) {
-            saveStoredMess(cloud.mess.id, cloud);
-            setInviteData({
-              id: cloud.mess.id,
-              name: cloud.mess.name,
-              manager: cloud.mess.manager,
-              code: clean,
-              currency: cloud.mess.currency,
-              timestamp: Date.now(),
+    // 1. Try server function
+    import("@/lib/mess.functions")
+      .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: clean } }))
+      .then((sRes) => {
+        if (sRes) {
+          setInviteData({
+            id: sRes.id,
+            name: sRes.name,
+            manager: sRes.manager,
+            code: clean,
+            currency: sRes.currency,
+            timestamp: Date.now(),
+          });
+          toast.success(`Mess found: ${sRes.name}`);
+          return;
+        }
+        throw new Error("Not found on server");
+      })
+      .catch(() => {
+        // 2. Check local
+        const local = findMessByInviteCode(clean);
+        if (local) {
+          setInviteData({
+            id: local.mess.id,
+            name: local.mess.name,
+            manager: local.mess.manager,
+            code: clean,
+            currency: local.mess.currency,
+            timestamp: Date.now(),
+          });
+          toast.success(`Mess found: ${local.mess.name}`);
+        } else {
+          // 3. Try cloud lookup
+          import("@/lib/cloud-sync")
+            .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(clean))
+            .then((cloud) => {
+              if (cloud) {
+                saveStoredMess(cloud.mess.id, cloud);
+                setInviteData({
+                  id: cloud.mess.id,
+                  name: cloud.mess.name,
+                  manager: cloud.mess.manager,
+                  code: clean,
+                  currency: cloud.mess.currency,
+                  timestamp: Date.now(),
+                });
+                toast.success(`Mess found: ${cloud.mess.name}`);
+              } else {
+                toast.error(
+                  "Mess not found for this 6-digit code. Please check with your mess admin.",
+                );
+              }
+            })
+            .catch(() => {
+              toast.error(
+                "Mess not found for this 6-digit code. Please check with your mess admin.",
+              );
             });
-            toast.success(`Mess found: ${cloud.mess.name}`);
-          } else {
-            toast.error("Mess not found for this 6-digit code. Please check with your mess admin.");
-          }
-        })
-        .catch(() => {
-          toast.error("Mess not found for this 6-digit code. Please check with your mess admin.");
-        });
-    }
+        }
+      });
   };
 
   // Get current members for dropdown/selection
@@ -374,12 +423,20 @@ function JoinMessPage() {
         memberName: memberNameToUse,
       });
 
-      // Background cloud sync
-      import("@/lib/cloud-sync")
-        .then(({ publishMessToCloud }) => {
-          if (currentRecord) publishMessToCloud(currentRecord).catch(() => {});
-        })
-        .catch(() => {});
+      // Cloud sync & server sync
+      try {
+        const { publishMessToCloud } = await import("@/lib/cloud-sync");
+        await publishMessToCloud(currentRecord);
+      } catch {
+        // ignore
+      }
+
+      try {
+        const { syncMessToServerFn } = await import("@/lib/mess.functions");
+        await syncMessToServerFn({ data: { record: currentRecord } });
+      } catch {
+        // ignore
+      }
 
       await qc.invalidateQueries();
       toast.success(`Welcome to ${inviteData.name}, ${memberNameToUse}! 🎉`);
