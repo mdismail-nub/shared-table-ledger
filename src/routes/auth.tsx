@@ -20,9 +20,9 @@ function AuthPage() {
     supabase.auth.getSession().then(({ data }) => { if (data.session) navigate({ to: "/", replace: true }); });
   }, [navigate]);
 
-  const signIn = async () => {
+  const signIn = async (provider: "google" | "lovable" = "google") => {
     setBusy(true);
-    const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    const r = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
     if (r.error) { toast.error("Sign-in failed. Please try again."); setBusy(false); return; }
     if (r.redirected) return;
     navigate({ to: "/", replace: true });
@@ -37,13 +37,11 @@ function AuthPage() {
         </div>
         <h1 className="mt-8 text-3xl font-extrabold leading-tight">Welcome back 👋</h1>
         <p className="mt-2 text-sm text-muted-foreground">Sign in with your Google account to continue.</p>
-        <Button onClick={signIn} disabled={busy} size="lg" className="mt-6 h-12 w-full rounded-xl text-base">
+        <Button onClick={() => signIn()} disabled={busy} size="lg" className="mt-6 h-12 w-full rounded-xl text-base">
           {busy ? <Loader2 className="animate-spin" /> : <GoogleIcon />} Continue with Google
         </Button>
-        <div className="mt-6 grid gap-2 text-sm">
-          <div className="flex gap-3 rounded-2xl bg-primary-soft p-3"><ShieldCheck className="h-5 w-5 shrink-0 text-primary" /><p><b>Manager</b> — the first person to sign in manages the mess.</p></div>
-          <div className="flex gap-3 rounded-2xl bg-mint p-3 text-mint-foreground"><Eye className="h-5 w-5 shrink-0" /><p><b>Members</b> — sign in, enter the invite code from your manager, and see your own meals and balance.</p></div>
-        </div>
+        <Button onClick={() => signIn("lovable")} disabled={busy} variant="outline" size="lg" className="mt-3 w-full">Continue with Lovable</Button>
+        <p className="mt-6 text-center text-xs text-muted-foreground">Your shared home, one simple account.</p>
       </div>
     </div>
   );
