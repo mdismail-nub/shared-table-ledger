@@ -352,6 +352,32 @@ export type Database = {
         }
         Relationships: []
       }
+      mess_user_roles: {
+        Row: {
+          mess_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          mess_id: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          mess_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mess_user_roles_mess_id_fkey"
+            columns: ["mess_id"]
+            isOneToOne: false
+            referencedRelation: "messes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messes: {
         Row: {
           address: string

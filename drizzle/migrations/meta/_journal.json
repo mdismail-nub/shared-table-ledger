@@ -15,6 +15,13 @@
       "when": 1793940073846,
       "tag": "0001_multi_mess_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794048374013,
+      "tag": "0002_harden_mess_roles_and_records",
+      "breakpoints": true
     }
   ]
 }

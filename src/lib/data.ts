@@ -45,12 +45,14 @@ export function useMe() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-      const { data: member } = await supabase.from("mess_members").select("*").eq("user_id", user.id).maybeSingle();
+      const { data: member, error } = await supabase.from("mess_members").select("*").eq("user_id", user.id).maybeSingle();
+      if (error) throw error;
+      const { data: role } = await supabase.from("mess_user_roles").select("role").eq("user_id", user.id).maybeSingle();
       const name = (user.user_metadata?.["full_name"] as string) || (user.user_metadata?.["name"] as string) || user.email?.split("@")[0] || "You";
       return {
         user: { id: user.id, email: user.email ?? "", name, avatar: (user.user_metadata?.["avatar_url"] as string) || "" },
         member: (member as Member | null) ?? null,
-        isAdmin: member?.role === "admin",
+        isAdmin: role?.role === "admin",
       };
     },
   });
