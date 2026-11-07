@@ -136,7 +136,44 @@ function Welcome() {
         return;
       }
 
-      // 3. Fallback to Supabase RPC
+      // 3. Check global cloud topic fallback (cross-browser, mobile, incognito)
+      try {
+        const { fetchMessFromCloudByCode } = await import("@/lib/cloud-sync");
+        const cloud = await fetchMessFromCloudByCode(clean);
+        if (cloud) {
+          saveStoredMess(cloud.mess.id, cloud);
+          const info: MessLookupResult = {
+            id: cloud.mess.id,
+            name: cloud.mess.name,
+            manager: cloud.mess.manager,
+            address: cloud.mess.address,
+            currency: cloud.mess.currency,
+            meal_categories: cloud.mess.meal_categories,
+            household_categories: cloud.mess.household_categories,
+            members: cloud.members.map((m) => ({
+              id: m.id,
+              name: m.name,
+              room: m.room,
+              tone: m.tone,
+              role: m.role,
+              status: m.status,
+            })),
+          };
+          setMessInfo(info);
+          if (info.members && info.members.length > 0 && info.members[0]) {
+            setSelectedMemberId(info.members[0].id);
+          } else {
+            setSelectedMemberId("");
+          }
+          toast.success(`Mess found: ${info.name}`);
+          setVerifying(false);
+          return;
+        }
+      } catch {
+        // Fall through
+      }
+
+      // 4. Fallback to Supabase RPC
       try {
         const { data, error } = await db.rpc("get_mess_by_invite_code", {
           invite_code: clean,
@@ -373,6 +410,28 @@ function Welcome() {
                 household_categories: local.mess.household_categories,
                 members: local.members.map((m) => ({ id: m.id, name: m.name })),
               };
+            }
+          }
+
+          if (!currentMess) {
+            try {
+              const { fetchMessFromCloudByCode } = await import("@/lib/cloud-sync");
+              const cloud = await fetchMessFromCloudByCode(cleanCode);
+              if (cloud) {
+                saveStoredMess(cloud.mess.id, cloud);
+                currentMess = {
+                  id: cloud.mess.id,
+                  name: cloud.mess.name,
+                  manager: cloud.mess.manager,
+                  address: cloud.mess.address,
+                  currency: cloud.mess.currency,
+                  meal_categories: cloud.mess.meal_categories,
+                  household_categories: cloud.mess.household_categories,
+                  members: cloud.members.map((m) => ({ id: m.id, name: m.name })),
+                };
+              }
+            } catch {
+              // ignore
             }
           }
 

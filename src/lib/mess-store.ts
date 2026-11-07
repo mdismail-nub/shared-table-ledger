@@ -136,8 +136,14 @@ export function saveStoredMess(messId: string, record: MessRecord) {
     safeSet(MESS_INDEX_KEY, JSON.stringify(index));
   }
 
-  // Also sync to server in background
+  // Also sync to cloud and server in background
   if (typeof window !== "undefined") {
+    import("./cloud-sync")
+      .then(({ publishMessToCloud }) => {
+        publishMessToCloud(record).catch(() => {});
+      })
+      .catch(() => {});
+
     import("./mess.functions")
       .then(({ syncMessToServerFn }) => {
         syncMessToServerFn({ data: { record } }).catch(() => {});
@@ -481,7 +487,14 @@ export async function signUpAdmin(params: {
 
   saveStoredMess(messId, newRecord);
 
-  // Sync to server immediately so members joining on other devices find it instantly
+  // Sync to cloud and server immediately so members joining on other devices find it instantly
+  try {
+    const { publishMessToCloud } = await import("./cloud-sync");
+    await publishMessToCloud(newRecord);
+  } catch (err) {
+    console.warn("Failed to publish new mess to cloud:", err);
+  }
+
   try {
     const { syncMessToServerFn } = await import("./mess.functions");
     await syncMessToServerFn({ data: { record: newRecord } });
@@ -529,6 +542,12 @@ export async function signInAdmin(params: {
 
   const existingRecord = getStoredMess(account.messId);
   if (existingRecord) {
+    import("./cloud-sync")
+      .then(({ publishMessToCloud }) => {
+        publishMessToCloud(existingRecord).catch(() => {});
+      })
+      .catch(() => {});
+
     import("./mess.functions")
       .then(({ syncMessToServerFn }) => {
         syncMessToServerFn({ data: { record: existingRecord } }).catch(() => {});

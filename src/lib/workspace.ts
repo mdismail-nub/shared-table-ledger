@@ -15,7 +15,7 @@ import {
 } from "./data";
 import { buildLedger, mealRate } from "./accounting";
 import { supabase } from "@/integrations/supabase/client";
-import { getAdminSession, getMessDataById, getMessDataByCode } from "./mess-store";
+import { getAdminSession, getMessDataById, getMessDataByCode, saveStoredMess } from "./mess-store";
 import { loadWorkspaceByCodeFn, loadWorkspaceByIdFn } from "./mess.functions";
 
 export interface WorkspacePayload {
@@ -52,6 +52,16 @@ export const workspaceOptions = (month = currentMonth()) =>
               notifications: (sRes.notifications ?? []) as NotificationItem[],
               userId: memberSession.memberId,
             };
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          const { fetchMessFromCloudByCode } = await import("./cloud-sync");
+          const cloud = await fetchMessFromCloudByCode(memberSession.code);
+          if (cloud) {
+            saveStoredMess(cloud.mess.id, cloud);
           }
         } catch {
           // ignore
@@ -120,6 +130,16 @@ export const workspaceOptions = (month = currentMonth()) =>
               notifications: (sRes.notifications ?? []) as NotificationItem[],
               userId: adminSession.userId,
             };
+          }
+        } catch {
+          // ignore
+        }
+
+        try {
+          const { fetchMessFromCloudById } = await import("./cloud-sync");
+          const cloud = await fetchMessFromCloudById(adminSession.messId);
+          if (cloud) {
+            saveStoredMess(cloud.mess.id, cloud);
           }
         } catch {
           // ignore

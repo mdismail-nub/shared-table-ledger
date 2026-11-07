@@ -333,10 +333,10 @@ export function calculateSummary(
 
 // ----------------- PUBLIC SERVER API -----------------
 
-export function serverLookupMessByCode(code: string) {
+export async function serverLookupMessByCode(code: string) {
   const clean = code.trim();
   const db = readDatabase();
-  const messId = db.inviteIndex[clean];
+  let messId = db.inviteIndex[clean];
   if (!messId || !db.messes[messId]) {
     // Also scan all messes just in case
     for (const [id, record] of Object.entries(db.messes)) {
@@ -344,22 +344,40 @@ export function serverLookupMessByCode(code: string) {
       if (invite === clean) {
         db.inviteIndex[clean] = id;
         writeDatabase(db);
+        messId = id;
+        break;
+      }
+    }
+  }
+
+  if (!messId || !db.messes[messId]) {
+    // Check cloud sync
+    try {
+      const { fetchMessFromCloudByCode } = await import("./cloud-sync");
+      const cloud = await fetchMessFromCloudByCode(clean);
+      if (cloud) {
+        db.messes[cloud.mess.id] = cloud;
+        db.inviteIndex[clean] = cloud.mess.id;
+        writeDatabase(db);
         return {
-          id: record.mess.id,
-          name: record.mess.name,
-          manager: record.mess.manager,
-          address: record.mess.address,
-          currency: record.mess.currency,
-          meal_categories: record.mess.meal_categories,
-          household_categories: record.mess.household_categories,
-          members: record.members.filter((m) => m.status !== "left"),
+          id: cloud.mess.id,
+          name: cloud.mess.name,
+          manager: cloud.mess.manager,
+          address: cloud.mess.address,
+          currency: cloud.mess.currency,
+          meal_categories: cloud.mess.meal_categories,
+          household_categories: cloud.mess.household_categories,
+          members: cloud.members.filter((m) => m.status !== "left"),
         };
       }
+    } catch {
+      // ignore
     }
     return null;
   }
 
   const record = db.messes[messId];
+  if (!record) return null;
   return {
     id: record.mess.id,
     name: record.mess.name,
@@ -431,7 +449,7 @@ export function serverCreateMess(params: {
     created_at: new Date().toISOString(),
   };
 
-  db.messes[messId] = {
+  const newRecord = {
     mess: newMess,
     members: [adminMember],
     meals: [],
@@ -439,9 +457,17 @@ export function serverCreateMess(params: {
     payments: [],
     notifications: [welcomeNotif],
   };
+  db.messes[messId] = newRecord;
   db.inviteIndex[inviteCode] = messId;
 
   writeDatabase(db);
+
+  import("./cloud-sync")
+    .then(({ publishMessToCloud }) => {
+      publishMessToCloud(newRecord).catch(() => {});
+    })
+    .catch(() => {});
+
   return {
     id: messId,
     name: params.name.trim(),
@@ -450,7 +476,11 @@ export function serverCreateMess(params: {
   };
 }
 
-export function serverGetWorkspace(params: { code?: string; messId?: string; month: string }) {
+export async function serverGetWorkspace(params: {
+  code?: string;
+  messId?: string;
+  month: string;
+}) {
   const db = readDatabase();
   let messId = params.messId;
   if (!messId && params.code) {
@@ -466,6 +496,26 @@ export function serverGetWorkspace(params: { code?: string; messId?: string; mon
           break;
         }
       }
+    }
+  }
+
+  if (!messId || !db.messes[messId]) {
+    try {
+      const { fetchMessFromCloudByCode, fetchMessFromCloudById } = await import("./cloud-sync");
+      const cloud = params.code
+        ? await fetchMessFromCloudByCode(params.code)
+        : params.messId
+          ? await fetchMessFromCloudById(params.messId)
+          : null;
+      if (cloud) {
+        db.messes[cloud.mess.id] = cloud;
+        const invite = (cloud.mess as unknown as { invite_code?: string })?.invite_code;
+        if (invite) db.inviteIndex[invite] = cloud.mess.id;
+        writeDatabase(db);
+        messId = cloud.mess.id;
+      }
+    } catch {
+      // ignore
     }
   }
 
@@ -556,6 +606,13 @@ export function serverSaveRecord(params: {
   }
 
   writeDatabase(db);
+
+  import("./cloud-sync")
+    .then(({ publishMessToCloud }) => {
+      publishMessToCloud(record).catch(() => {});
+    })
+    .catch(() => {});
+
   return { ok: true };
 }
 
@@ -568,5 +625,12 @@ export function serverSyncMessRecord(record: MessRecord) {
     db.inviteIndex[invite] = messId;
   }
   writeDatabase(db);
+
+  import("./cloud-sync")
+    .then(({ publishMessToCloud }) => {
+      publishMessToCloud(record).catch(() => {});
+    })
+    .catch(() => {});
+
   return { ok: true };
 }

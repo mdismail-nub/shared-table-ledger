@@ -288,8 +288,15 @@ export function useInviteCode() {
         const code = (data?.mess as unknown as { invite_code?: string })?.invite_code;
         if (code) return code;
       }
+      const memberSession = getMemberSession();
+      if (memberSession?.code) {
+        const data = getMessDataByCode(memberSession.code, currentMonth());
+        const code =
+          (data?.mess as unknown as { invite_code?: string })?.invite_code || memberSession.code;
+        if (code) return code;
+      }
       const { data, error } = await supabase.rpc("mess_invite_code");
-      if (error) throw error;
+      if (error) return null;
       return (data as string | null) ?? null;
     },
   });

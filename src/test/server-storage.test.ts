@@ -7,7 +7,7 @@ import {
 } from "@/lib/server-storage.server";
 
 describe("Server storage and 6-digit code member joining", () => {
-  it("creates a mess with a valid 6-digit invite code and finds it", () => {
+  it("creates a mess with a valid 6-digit invite code and finds it", async () => {
     const created = serverCreateMess({
       name: "Sunrise Villa",
       manager: "Kabir Hossain",
@@ -18,21 +18,21 @@ describe("Server storage and 6-digit code member joining", () => {
     expect(created.invite_code).toMatch(/^\d{6}$/);
 
     // Member joins with the 6-digit code from any browser or device
-    const lookup = serverLookupMessByCode(created.invite_code);
+    const lookup = await serverLookupMessByCode(created.invite_code);
     expect(lookup).not.toBeNull();
     expect(lookup?.name).toBe("Sunrise Villa");
     expect(lookup?.members.length).toBeGreaterThanOrEqual(1);
     expect(lookup?.members[0]?.name).toBe("Kabir Hossain");
   });
 
-  it("loads workspace data by invite code for members", () => {
+  it("loads workspace data by invite code for members", async () => {
     const created = serverCreateMess({
       name: "Green Valley Mess",
       manager: "Rafiq",
     });
 
     const month = new Date().toISOString().slice(0, 7);
-    const workspace = serverGetWorkspace({
+    const workspace = await serverGetWorkspace({
       code: created.invite_code,
       month,
     });
@@ -43,7 +43,7 @@ describe("Server storage and 6-digit code member joining", () => {
     expect(workspace?.notifications.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("allows admin to add members and send custom notifications", () => {
+  it("allows admin to add members and send custom notifications", async () => {
     const created = serverCreateMess({
       name: "Bachelor Haven",
       manager: "Admin Hasan",
@@ -69,7 +69,7 @@ describe("Server storage and 6-digit code member joining", () => {
     });
 
     // Check member appears in lookup
-    const lookup = serverLookupMessByCode(created.invite_code);
+    const lookup = await serverLookupMessByCode(created.invite_code);
     const found = lookup?.members.find((m) => m.id === "mem_shakib_99");
     expect(found).toBeDefined();
     expect(found?.name).toBe("Shakib Al Hasan");
@@ -94,7 +94,7 @@ describe("Server storage and 6-digit code member joining", () => {
     });
 
     const month = new Date().toISOString().slice(0, 7);
-    const workspace = serverGetWorkspace({
+    const workspace = await serverGetWorkspace({
       messId: created.id,
       month,
     });

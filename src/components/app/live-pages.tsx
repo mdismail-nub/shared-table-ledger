@@ -976,6 +976,18 @@ export function SettingsPage() {
             >
               <Copy />
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const link = `${window.location.origin}/?code=${invite.data}`;
+                await navigator.clipboard.writeText(link);
+                toast.success("Direct invitation link copied!");
+              }}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy Direct Link
+            </Button>
             {w.isAdmin && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
