@@ -112,7 +112,7 @@ export function clearAdminSession() {
   safeRemove(ADMIN_SESSION_KEY);
 }
 
-function getStoredMess(messId: string): MessRecord | null {
+export function getStoredMess(messId: string): MessRecord | null {
   const raw = safeGet(`${MESS_STORE_PREFIX}${messId}`);
   if (!raw) return null;
   try {
@@ -134,6 +134,15 @@ export function saveStoredMess(messId: string, record: MessRecord) {
   if (!index.includes(messId)) {
     index.push(messId);
     safeSet(MESS_INDEX_KEY, JSON.stringify(index));
+  }
+
+  // Also sync to server in background
+  if (typeof window !== "undefined") {
+    import("./mess.functions")
+      .then(({ syncMessToServerFn }) => {
+        syncMessToServerFn({ data: { record } }).catch(() => {});
+      })
+      .catch(() => {});
   }
 }
 
@@ -461,14 +470,24 @@ export async function signUpAdmin(params: {
     created_at: new Date().toISOString(),
   };
 
-  saveStoredMess(messId, {
+  const newRecord: MessRecord = {
     mess: newMess,
     members: [adminMember],
     meals: [],
     expenses: [],
     payments: [],
     notifications: [initialNotif],
-  });
+  };
+
+  saveStoredMess(messId, newRecord);
+
+  // Sync to server immediately so members joining on other devices find it instantly
+  try {
+    const { syncMessToServerFn } = await import("./mess.functions");
+    await syncMessToServerFn({ data: { record: newRecord } });
+  } catch (err) {
+    console.warn("Failed to sync new mess to server:", err);
+  }
 
   accounts.push(newAccount);
   saveStoredAccounts(accounts);
@@ -506,6 +525,15 @@ export async function signInAdmin(params: {
   const hash = await hashPassword(params.password);
   if (hash !== account.passwordHash && params.password !== "password123") {
     throw new Error("Incorrect password. Please try again.");
+  }
+
+  const existingRecord = getStoredMess(account.messId);
+  if (existingRecord) {
+    import("./mess.functions")
+      .then(({ syncMessToServerFn }) => {
+        syncMessToServerFn({ data: { record: existingRecord } }).catch(() => {});
+      })
+      .catch(() => {});
   }
 
   const session: AdminSession = {

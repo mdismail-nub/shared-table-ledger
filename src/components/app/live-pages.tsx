@@ -144,7 +144,11 @@ export function SpendingChart() {
 
 function NoticeBoard() {
   const w = useWorkspace();
-  const notifications = w.notifications ?? [];
+  const notifications = (w.notifications ?? []).filter((n) => {
+    if (w.isAdmin) return true;
+    if (!n.recipient_id) return true;
+    return n.recipient_id === w.userId;
+  });
 
   const typeConfig: Record<string, { tone: string; label: string }> = {
     notice: { tone: "bg-lime text-lime-foreground", label: "Notice" },
@@ -325,7 +329,7 @@ export function MembersPage() {
       <PageIntro
         title="Housemates"
         subtitle={`${w.members.length} members · ${w.mess?.name}`}
-        actions={<LiveDialog kind="member" />}
+        actions={w.isAdmin ? <LiveDialog kind="member" /> : null}
       />
       <Input
         aria-label="Search members"
@@ -388,9 +392,7 @@ export function MealsPage() {
   >({});
   const slots = ["breakfast", "lunch", "dinner"] as const;
 
-  const visible = w.isAdmin
-    ? w.members.filter((m) => m.status !== "left")
-    : w.members.filter((m) => m.user_id === w.userId);
+  const visible = w.members.filter((m) => m.status !== "left");
 
   const row = (id: string) =>
     draft[id] ??
@@ -509,7 +511,9 @@ export function MealsPage() {
       <section>
         <h2 className="mb-4 text-lg font-bold">Monthly meal totals</h2>
         {w.ledger
-          .filter((m) => w.isAdmin || m.user_id === w.userId)
+          .filter(
+            (m) => w.isAdmin || (w.userId ? m.id === w.userId || m.user_id === w.userId : true),
+          )
           .map((m) => (
             <div key={m.id} className="mb-4">
               <div className="mb-2 flex justify-between text-sm">
@@ -589,7 +593,7 @@ export function PaymentsPage() {
       <PageIntro
         title={w.isAdmin ? "Payments" : "My payments"}
         subtitle={monthLabel(w.month)}
-        actions={<LiveDialog kind="payment" />}
+        actions={w.isAdmin ? <LiveDialog kind="payment" /> : null}
       />
       <PaymentList />
     </>
@@ -616,7 +620,7 @@ export function ExpensesPage() {
       <PageIntro
         title="Expenses"
         subtitle="Food and household bills, kept separate."
-        actions={<LiveDialog kind="expense" />}
+        actions={w.isAdmin ? <LiveDialog kind="expense" /> : null}
       />
       <div className="grid grid-cols-2 gap-3">
         <StatCard
@@ -716,7 +720,10 @@ export function ExpensesPage() {
 
 export function AccountsPage() {
   const w = useWorkspace();
-  const rows = w.isAdmin ? w.ledger : w.ledger.filter((m) => m.user_id === w.userId);
+  const filtered = w.ledger.filter((m) =>
+    w.userId ? m.id === w.userId || m.user_id === w.userId : true,
+  );
+  const rows = w.isAdmin ? w.ledger : filtered.length ? filtered : w.ledger;
 
   return (
     <div className="space-y-6">
@@ -800,12 +807,13 @@ export function ReportsPage() {
         actions={
           <Button
             variant="outline"
-            onClick={() =>
-              exportLedger(
-                w.isAdmin ? w.ledger : w.ledger.filter((m) => m.user_id === w.userId),
-                w.month,
-              )
-            }
+            onClick={() => {
+              const filtered = w.ledger.filter((m) =>
+                w.userId ? m.id === w.userId || m.user_id === w.userId : true,
+              );
+              const target = w.isAdmin ? w.ledger : filtered.length ? filtered : w.ledger;
+              exportLedger(target, w.month);
+            }}
           >
             <Download />
             Export CSV

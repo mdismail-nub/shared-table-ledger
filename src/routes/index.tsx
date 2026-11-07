@@ -19,7 +19,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { pageMeta } from "@/lib/meta";
 import { useMe, db, getMemberSession, setMemberSession, clearMemberSession } from "@/lib/data";
-import { findMessByInviteCode, getAdminSession } from "@/lib/mess-store";
+import {
+  findMessByInviteCode,
+  getAdminSession,
+  setAdminSession,
+  saveStoredMess,
+  type AdminSession,
+} from "@/lib/mess-store";
+import { lookupMessByCodeFn, createMessFn } from "@/lib/mess.functions";
 import welcome from "@/assets/onboard-welcome.png";
 import admin from "@/assets/role-admin.png";
 import member from "@/assets/role-member.png";
@@ -63,7 +70,42 @@ function Welcome() {
     }
     setVerifying(true);
     try {
-      // 1. Check local mess store first
+      // 1. Try server function (works across all browsers, incognito, and devices!)
+      try {
+        const sRes = await lookupMessByCodeFn({ data: { code: clean } });
+        if (sRes) {
+          const info: MessLookupResult = {
+            id: sRes.id,
+            name: sRes.name,
+            manager: sRes.manager,
+            address: sRes.address,
+            currency: sRes.currency,
+            meal_categories: sRes.meal_categories,
+            household_categories: sRes.household_categories,
+            members: sRes.members.map((m) => ({
+              id: m.id,
+              name: m.name,
+              room: m.room,
+              tone: m.tone,
+              role: m.role,
+              status: m.status,
+            })),
+          };
+          setMessInfo(info);
+          if (info.members && info.members.length > 0 && info.members[0]) {
+            setSelectedMemberId(info.members[0].id);
+          } else {
+            setSelectedMemberId("");
+          }
+          toast.success(`Mess found: ${info.name}`);
+          setVerifying(false);
+          return;
+        }
+      } catch {
+        // Fall back to local check
+      }
+
+      // 2. Check local mess store fallback
       const local = findMessByInviteCode(clean);
       if (local) {
         const info: MessLookupResult = {
@@ -94,23 +136,29 @@ function Welcome() {
         return;
       }
 
-      // 2. Fallback to Supabase RPC
-      const { data, error } = await db.rpc("get_mess_by_invite_code", {
-        invite_code: clean,
-      });
-      if (error || !data) {
-        setMessInfo(null);
-        toast.error("Invalid 6-digit invitation code. Please check with your mess admin.");
-      } else {
-        const info = data as unknown as MessLookupResult;
-        setMessInfo(info);
-        if (info.members && info.members.length > 0 && info.members[0]) {
-          setSelectedMemberId(info.members[0].id);
-        } else {
-          setSelectedMemberId("");
+      // 3. Fallback to Supabase RPC
+      try {
+        const { data, error } = await db.rpc("get_mess_by_invite_code", {
+          invite_code: clean,
+        });
+        if (!error && data) {
+          const info = data as unknown as MessLookupResult;
+          setMessInfo(info);
+          if (info.members && info.members.length > 0 && info.members[0]) {
+            setSelectedMemberId(info.members[0].id);
+          } else {
+            setSelectedMemberId("");
+          }
+          toast.success(`Mess found: ${info.name}`);
+          setVerifying(false);
+          return;
         }
-        toast.success(`Mess found: ${info.name}`);
+      } catch {
+        // Fall through
       }
+
+      setMessInfo(null);
+      toast.error("Invalid 6-digit invitation code. Please check with your mess admin.");
     } catch (err) {
       setMessInfo(null);
       toast.error(err instanceof Error ? err.message : "Failed to verify code.");
@@ -206,16 +254,86 @@ function Welcome() {
           throw new Error("Mess name must be between 2 and 80 characters.");
         if (manager.length < 1 || manager.length > 80) throw new Error("Please enter your name.");
 
-        const { data, error } = await db.rpc("create_mess", {
-          _name: name,
-          _address: address.slice(0, 200),
-          _manager: manager,
-          _start_day: 1,
-          _currency: "BDT (৳)",
+        const res = await createMessFn({
+          data: {
+            name,
+            manager,
+            address: address.slice(0, 200),
+            currency: "BDT (৳)",
+          },
         });
-        if (error) throw error;
-        const value = data as { invite_code: string };
-        setCreated(value.invite_code);
+
+        // Set admin session
+        const session: AdminSession = {
+          userId: res.owner_id,
+          email: `${manager.toLowerCase().replace(/\s+/g, "")}@mess.local`,
+          name: manager,
+          messId: res.id,
+          token: `adm_${Date.now()}`,
+          createdAt: new Date().toISOString(),
+        };
+        setAdminSession(session);
+
+        const newMess = {
+          id: res.id,
+          owner_id: res.owner_id,
+          name,
+          address: address.slice(0, 200) || "Dhaka, Bangladesh",
+          manager,
+          start_day: 1,
+          currency: "BDT (৳)",
+          invite_code: res.invite_code,
+          show_invite_to_members: true,
+          meal_categories: [
+            "Rice",
+            "Vegetables",
+            "Fish & meat",
+            "Eggs",
+            "Cooking oil",
+            "Spices",
+            "Other food",
+          ],
+          household_categories: [
+            "Wi-Fi",
+            "Electricity",
+            "Gas",
+            "Water",
+            "Cleaning",
+            "Other household",
+          ],
+        };
+        const adminMember = {
+          id: `mem_${res.owner_id.slice(0, 8)}`,
+          user_id: res.owner_id,
+          role: "admin" as const,
+          name,
+          phone: "",
+          room: "A-1",
+          joined: new Date().toISOString().slice(0, 10),
+          status: "active" as const,
+          tone: "primary" as const,
+        };
+        saveStoredMess(res.id, {
+          mess: newMess,
+          members: [adminMember],
+          meals: [],
+          expenses: [],
+          payments: [],
+          notifications: [
+            {
+              id: `ntf_${Date.now()}`,
+              mess_id: res.id,
+              sender_id: adminMember.id,
+              recipient_id: null,
+              title: "Mess Created Successfully 🎉",
+              message: `Welcome to ${name}! Share your 6-digit invitation code (${res.invite_code}) with your housemates.`,
+              type: "notice",
+              created_at: new Date().toISOString(),
+            },
+          ],
+        });
+
+        setCreated(res.invite_code);
         setStep("done");
       } else {
         const cleanCode = code.replace(/\D/g, "").slice(0, 6);
@@ -224,11 +342,43 @@ function Welcome() {
 
         let currentMess = messInfo;
         if (!currentMess) {
-          const { data, error } = await db.rpc("get_mess_by_invite_code", {
-            invite_code: cleanCode,
-          });
-          if (error || !data) throw new Error("Invalid 6-digit invitation code.");
-          currentMess = data as unknown as MessLookupResult;
+          try {
+            const sRes = await lookupMessByCodeFn({ data: { code: cleanCode } });
+            if (sRes) {
+              currentMess = {
+                id: sRes.id,
+                name: sRes.name,
+                manager: sRes.manager,
+                address: sRes.address,
+                currency: sRes.currency,
+                meal_categories: sRes.meal_categories,
+                household_categories: sRes.household_categories,
+                members: sRes.members.map((m) => ({ id: m.id, name: m.name })),
+              };
+            }
+          } catch {
+            // ignore
+          }
+
+          if (!currentMess) {
+            const local = findMessByInviteCode(cleanCode);
+            if (local) {
+              currentMess = {
+                id: local.mess.id,
+                name: local.mess.name,
+                manager: local.mess.manager,
+                address: local.mess.address,
+                currency: local.mess.currency,
+                meal_categories: local.mess.meal_categories,
+                household_categories: local.mess.household_categories,
+                members: local.members.map((m) => ({ id: m.id, name: m.name })),
+              };
+            }
+          }
+
+          if (!currentMess) {
+            throw new Error("Invalid 6-digit invitation code. Please check with your mess admin.");
+          }
         }
 
         const selectedMember = currentMess.members?.find((m) => m.id === selectedMemberId);

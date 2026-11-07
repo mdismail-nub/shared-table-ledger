@@ -4,6 +4,7 @@ import {
   currentMonth,
   useMonth,
   getMemberSession,
+  db,
   type Mess,
   type Member,
   type Meal,
@@ -15,6 +16,7 @@ import {
 import { buildLedger, mealRate } from "./accounting";
 import { supabase } from "@/integrations/supabase/client";
 import { getAdminSession, getMessDataById, getMessDataByCode } from "./mess-store";
+import { loadWorkspaceByCodeFn, loadWorkspaceByIdFn } from "./mess.functions";
 
 export interface WorkspacePayload {
   mess: Mess;
@@ -34,6 +36,27 @@ export const workspaceOptions = (month = currentMonth()) =>
     queryFn: async (): Promise<WorkspacePayload> => {
       const memberSession = getMemberSession();
       if (memberSession?.code) {
+        try {
+          const sRes = await loadWorkspaceByCodeFn({
+            data: { code: memberSession.code, month },
+          });
+          if (sRes) {
+            return {
+              mess: sRes.mess,
+              members: (sRes.members ?? []) as Member[],
+              isAdmin: false,
+              meals: (sRes.meals ?? []) as Meal[],
+              expenses: (sRes.expenses ?? []) as Expense[],
+              payments: (sRes.payments ?? []) as Payment[],
+              summary: sRes.summary,
+              notifications: (sRes.notifications ?? []) as NotificationItem[],
+              userId: memberSession.memberId,
+            };
+          }
+        } catch {
+          // ignore
+        }
+
         const storeData = getMessDataByCode(memberSession.code, month);
         if (storeData) {
           return {
@@ -50,7 +73,7 @@ export const workspaceOptions = (month = currentMonth()) =>
         }
 
         try {
-          const { data, error } = await supabase.rpc("get_workspace_by_invite_code", {
+          const { data, error } = await db.rpc("get_workspace_by_invite_code", {
             invite_code: memberSession.code,
             p_month: month,
           });
@@ -81,6 +104,27 @@ export const workspaceOptions = (month = currentMonth()) =>
 
       const adminSession = getAdminSession();
       if (adminSession) {
+        try {
+          const sRes = await loadWorkspaceByIdFn({
+            data: { messId: adminSession.messId, month },
+          });
+          if (sRes) {
+            return {
+              mess: sRes.mess,
+              members: (sRes.members ?? []) as Member[],
+              isAdmin: true,
+              meals: (sRes.meals ?? []) as Meal[],
+              expenses: (sRes.expenses ?? []) as Expense[],
+              payments: (sRes.payments ?? []) as Payment[],
+              summary: sRes.summary,
+              notifications: (sRes.notifications ?? []) as NotificationItem[],
+              userId: adminSession.userId,
+            };
+          }
+        } catch {
+          // ignore
+        }
+
         const storeData = getMessDataById(adminSession.messId, month);
         if (storeData) {
           return {

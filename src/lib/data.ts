@@ -640,6 +640,42 @@ const storeDb = {
   }),
 
   rpc: async (fn: string, args?: AnyData) => {
+    if (fn === "create_mess") {
+      const { createMessFn } = await import("./mess.functions");
+      const res = await createMessFn({
+        data: {
+          name: args?._name || "My Mess",
+          manager: args?._manager || "Admin",
+          address: args?._address || "",
+          currency: args?._currency || "BDT (৳)",
+        },
+      });
+      return { data: res, error: null };
+    }
+    if (fn === "get_mess_by_invite_code") {
+      const { lookupMessByCodeFn } = await import("./mess.functions");
+      const res = await lookupMessByCodeFn({
+        data: { code: String(args?.invite_code || args?._code || "") },
+      });
+      return { data: res, error: null };
+    }
+    if (fn === "get_workspace_by_invite_code") {
+      const { loadWorkspaceByCodeFn } = await import("./mess.functions");
+      const res = await loadWorkspaceByCodeFn({
+        data: {
+          code: String(args?.invite_code || args?._code || ""),
+          month: String(args?.p_month || currentMonth()),
+        },
+      });
+      return { data: res, error: null };
+    }
+    if (fn === "join_mess_by_code") {
+      const { lookupMessByCodeFn } = await import("./mess.functions");
+      const res = await lookupMessByCodeFn({
+        data: { code: String(args?._code || args?.invite_code || "") },
+      });
+      return { data: res?.id || null, error: null };
+    }
     const admin = getAdminSession();
     if (admin) {
       if (fn === "regenerate_invite_code") {
