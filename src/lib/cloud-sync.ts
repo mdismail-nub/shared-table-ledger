@@ -3,6 +3,16 @@ import type { MessRecord } from "./mess-store";
 const CLOUD_SYNC_BASE = "https://ntfy.sh";
 const INVITE_TOPIC_PREFIX = "mm_shared_table_";
 const MESS_TOPIC_PREFIX = "mm_mess_id_";
+const CLOUD_SYNC_TIMEOUT = 1500;
+
+function createSignal(): AbortSignal {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(CLOUD_SYNC_TIMEOUT);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), CLOUD_SYNC_TIMEOUT);
+  return controller.signal;
+}
 
 /**
  * Publishes a mess record to public cloud topics so that any member
@@ -24,6 +34,7 @@ export async function publishMessToCloud(record: MessRecord): Promise<boolean> {
           Tags: "mess",
         },
         body: payload,
+        signal: createSignal(),
       }).catch(() => null),
     );
   }
@@ -37,6 +48,7 @@ export async function publishMessToCloud(record: MessRecord): Promise<boolean> {
           Tags: "mess",
         },
         body: payload,
+        signal: createSignal(),
       }).catch(() => null),
     );
   }
@@ -49,17 +61,22 @@ export async function publishMessToCloud(record: MessRecord): Promise<boolean> {
  * Helper to extract MessRecord from an ntfy message line.
  * Handles both inline JSON in item.message and attachments in item.attachment.url.
  */
-async function extractRecordFromNtfyItem(item: {
-  event?: string;
-  message?: string;
-  attachment?: { url?: string };
-}): Promise<MessRecord | null> {
+async function extractRecordFromNtfyItem(
+  item: {
+    event?: string;
+    message?: string;
+    attachment?: { url?: string };
+  },
+  signal?: AbortSignal,
+): Promise<MessRecord | null> {
   if (item?.event !== "message") return null;
 
   // 1. If ntfy uploaded payload as an attachment (happens for payloads > 4KB):
   if (item.attachment && item.attachment.url) {
     try {
-      const attachRes = await fetch(item.attachment.url, { cache: "no-store" });
+      const fetchOpts: RequestInit = { cache: "no-store" };
+      if (signal) fetchOpts.signal = signal;
+      const attachRes = await fetch(item.attachment.url, fetchOpts);
       if (attachRes.ok) {
         const text = await attachRes.text();
         const record = JSON.parse(text) as MessRecord;
@@ -95,13 +112,11 @@ export async function fetchMessFromCloudByCode(code: string): Promise<MessRecord
   if (clean.length !== 6) return null;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
+    const signal = createSignal();
     const res = await fetch(
       `${CLOUD_SYNC_BASE}/${INVITE_TOPIC_PREFIX}${clean}/json?poll=1&since=all`,
-      { cache: "no-store", signal: controller.signal },
+      { cache: "no-store", signal },
     );
-    clearTimeout(timer);
     if (!res.ok) return null;
 
     const raw = await res.text();
@@ -116,7 +131,7 @@ export async function fetchMessFromCloudByCode(code: string): Promise<MessRecord
         const line = lines[i];
         if (!line) continue;
         const item = JSON.parse(line);
-        const record = await extractRecordFromNtfyItem(item);
+        const record = await extractRecordFromNtfyItem(item, signal);
         if (record) {
           return record;
         }
@@ -138,13 +153,11 @@ export async function fetchMessFromCloudById(messId: string): Promise<MessRecord
   if (!messId) return null;
 
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
+    const signal = createSignal();
     const res = await fetch(
       `${CLOUD_SYNC_BASE}/${MESS_TOPIC_PREFIX}${messId}/json?poll=1&since=all`,
-      { cache: "no-store", signal: controller.signal },
+      { cache: "no-store", signal },
     );
-    clearTimeout(timer);
     if (!res.ok) return null;
 
     const raw = await res.text();
@@ -159,7 +172,7 @@ export async function fetchMessFromCloudById(messId: string): Promise<MessRecord
         const line = lines[i];
         if (!line) continue;
         const item = JSON.parse(line);
-        const record = await extractRecordFromNtfyItem(item);
+        const record = await extractRecordFromNtfyItem(item, signal);
         if (record) {
           return record;
         }

@@ -1,3 +1,13 @@
+export interface InviteMemberSummary {
+  id: string;
+  name: string;
+  role?: "admin" | "member";
+  room?: string;
+  phone?: string;
+  status?: "active" | "new" | "left";
+  tone?: string;
+}
+
 export interface InvitePayload {
   id: string;
   name: string;
@@ -5,6 +15,7 @@ export interface InvitePayload {
   code: string;
   currency?: string | undefined;
   memberCount?: number | undefined;
+  members?: InviteMemberSummary[] | undefined;
   timestamp?: number | undefined;
 }
 
@@ -47,6 +58,11 @@ export function decodeInviteToken(token: string): InvitePayload | null {
     }
     const data = JSON.parse(json);
     if (data && (data.id || data.name)) {
+      if (Array.isArray(data.members) && (!data.memberCount || data.memberCount <= 0)) {
+        data.memberCount = data.members.filter(
+          (m: { status?: string }) => m.status !== "left",
+        ).length;
+      }
       return data as InvitePayload;
     }
     return null;
@@ -65,15 +81,44 @@ export function createMessInviteLink(params: {
   code: string;
   currency?: string | undefined;
   memberCount?: number | undefined;
+  members?:
+    | Array<{
+        id: string;
+        name: string;
+        role?: "admin" | "member";
+        room?: string;
+        phone?: string;
+        status?: "active" | "new" | "left";
+        tone?: string;
+      }>
+    | undefined;
 }): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const members: InviteMemberSummary[] | undefined = params.members?.map((m) => ({
+    id: m.id,
+    name: m.name,
+    role: m.role || "member",
+    room: m.room || "",
+    phone: m.phone || "",
+    status: m.status || "active",
+    tone: m.tone || "mint",
+  }));
+
+  const activeCount =
+    typeof params.memberCount === "number" && params.memberCount > 0
+      ? params.memberCount
+      : members && members.length > 0
+        ? members.filter((m) => m.status !== "left").length
+        : undefined;
+
   const token = encodeInviteToken({
     id: params.id,
     name: params.name,
     manager: params.manager,
     code: params.code,
     currency: params.currency || "BDT (৳)",
-    memberCount: params.memberCount,
+    memberCount: activeCount,
+    members,
     timestamp: Date.now(),
   });
 
@@ -86,8 +131,8 @@ export function createMessInviteLink(params: {
     code: params.code,
   });
 
-  if (typeof params.memberCount === "number" && params.memberCount > 0) {
-    query.set("mc", String(params.memberCount));
+  if (typeof activeCount === "number" && activeCount > 0) {
+    query.set("mc", String(activeCount));
   }
 
   return `${origin}/join?${query.toString()}`;

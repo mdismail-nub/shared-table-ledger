@@ -297,7 +297,44 @@ export const workspaceOptions = (month = currentMonth()) =>
         };
       }
 
-      return (await loadWorkspace({ data: { month } })) as unknown as WorkspacePayload;
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          const res = (await loadWorkspace({ data: { month } })) as unknown as WorkspacePayload;
+          if (res?.mess) return res;
+        }
+      } catch {
+        // ignore
+      }
+
+      if (typeof window !== "undefined") {
+        window.location.replace("/");
+      }
+
+      return {
+        mess: {
+          id: "mess_none",
+          owner_id: "usr_none",
+          name: "Mess Manager",
+          manager: "Admin",
+          address: "Dhaka, Bangladesh",
+          start_day: 1,
+          currency: "BDT (৳)",
+          show_invite_to_members: true,
+          meal_categories: [],
+          household_categories: [],
+        },
+        members: [],
+        isAdmin: false,
+        meals: [],
+        expenses: [],
+        payments: [],
+        summary: { food: 0, household: 0, total_meals: 0, deposits: 0, active_members: 0 },
+        notifications: [],
+        userId: null,
+      };
     },
   });
 

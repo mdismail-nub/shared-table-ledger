@@ -1,11 +1,8 @@
 {
   "version": 1,
-  "asset_id": "d5b2898f-41dc-41b8-8f59-dcfd1c048d02",
-  "project_id": "36e058a0-368f-4562-bf68-4982f2289b64",
-  "url": "/__l5e/assets-v1/d5b2898f-41dc-41b8-8f59-dcfd1c048d02/logo.png",
-  "r2_key": "a/v1/36e058a0-368f-4562-bf68-4982f2289b64/d5b2898f-41dc-41b8-8f59-dcfd1c048d02/logo.png",
+  "asset_id": "logo-mess-manager",
+  "project_id": "shared-table-ledger",
+  "url": "/logo.png",
   "original_filename": "logo.png",
-  "size": 1167917,
-  "content_type": "image/png",
-  "created_at": "2026-10-23T07:02:31Z"
+  "content_type": "image/png"
 }

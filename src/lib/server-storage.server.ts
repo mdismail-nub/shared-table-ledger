@@ -250,14 +250,29 @@ function getInitialDatabase(): ServerDatabase {
   };
 }
 
+function getGlobalDatabase(): ServerDatabase | null {
+  return (
+    (globalThis as unknown as { __MESS_DATABASE__?: ServerDatabase }).__MESS_DATABASE__ ?? null
+  );
+}
+
+function setGlobalDatabase(db: ServerDatabase): void {
+  (globalThis as unknown as { __MESS_DATABASE__?: ServerDatabase }).__MESS_DATABASE__ = db;
+}
+
 function readDatabase(): ServerDatabase {
-  ensureDirectoryExists();
-  if (!fs.existsSync(STORE_PATH)) {
-    const init = getInitialDatabase();
-    writeDatabase(init);
-    return init;
+  const cached = getGlobalDatabase();
+  if (cached && Object.keys(cached.messes).length > 0) {
+    return cached;
   }
+
   try {
+    ensureDirectoryExists();
+    if (!fs.existsSync(STORE_PATH)) {
+      const init = getInitialDatabase();
+      writeDatabase(init);
+      return init;
+    }
     const raw = fs.readFileSync(STORE_PATH, "utf8");
     const parsed = JSON.parse(raw);
     if (!parsed || !parsed.messes) {
@@ -265,20 +280,22 @@ function readDatabase(): ServerDatabase {
       writeDatabase(init);
       return init;
     }
+    setGlobalDatabase(parsed);
     return parsed;
   } catch {
     const init = getInitialDatabase();
-    writeDatabase(init);
+    setGlobalDatabase(init);
     return init;
   }
 }
 
 function writeDatabase(db: ServerDatabase) {
-  ensureDirectoryExists();
+  setGlobalDatabase(db);
   try {
+    ensureDirectoryExists();
     fs.writeFileSync(STORE_PATH, JSON.stringify(db, null, 2), "utf8");
   } catch (err) {
-    console.error("[server-storage] Failed to write database:", err);
+    // Non-fatal on serverless runtimes
   }
 }
 
@@ -352,27 +369,6 @@ export async function serverLookupMessByCode(code: string) {
   }
 
   if (!messId || !db.messes[messId]) {
-    // Check cloud sync
-    try {
-      const cloud = await fetchMessFromCloudByCode(clean);
-      if (cloud) {
-        db.messes[cloud.mess.id] = cloud;
-        db.inviteIndex[clean] = cloud.mess.id;
-        writeDatabase(db);
-        return {
-          id: cloud.mess.id,
-          name: cloud.mess.name,
-          manager: cloud.mess.manager,
-          address: cloud.mess.address,
-          currency: cloud.mess.currency,
-          meal_categories: cloud.mess.meal_categories,
-          household_categories: cloud.mess.household_categories,
-          members: cloud.members.filter((m) => m.status !== "left"),
-        };
-      }
-    } catch {
-      // ignore
-    }
     return null;
   }
 
@@ -461,12 +457,7 @@ export async function serverCreateMess(params: {
   db.inviteIndex[inviteCode] = messId;
 
   writeDatabase(db);
-
-  try {
-    await publishMessToCloud(newRecord);
-  } catch {
-    // ignore
-  }
+  void publishMessToCloud(newRecord).catch(() => {});
 
   return {
     id: messId,
@@ -500,22 +491,7 @@ export async function serverGetWorkspace(params: {
   }
 
   if (!messId || !db.messes[messId]) {
-    try {
-      const cloud = params.code
-        ? await fetchMessFromCloudByCode(params.code)
-        : params.messId
-          ? await fetchMessFromCloudById(params.messId)
-          : null;
-      if (cloud) {
-        db.messes[cloud.mess.id] = cloud;
-        const invite = (cloud.mess as unknown as { invite_code?: string })?.invite_code;
-        if (invite) db.inviteIndex[invite] = cloud.mess.id;
-        writeDatabase(db);
-        messId = cloud.mess.id;
-      }
-    } catch {
-      // ignore
-    }
+    return null;
   }
 
   if (!messId) return null;
@@ -673,12 +649,7 @@ export async function serverSyncMessRecord(record: MessRecord) {
     db.inviteIndex[invite] = messId;
   }
   writeDatabase(db);
-
-  try {
-    await publishMessToCloud(db.messes[messId] || record);
-  } catch {
-    // ignore
-  }
+  void publishMessToCloud(db.messes[messId] || record).catch(() => {});
 
   return { ok: true, record: db.messes[messId] || record };
 }

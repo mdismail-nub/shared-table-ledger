@@ -39,7 +39,7 @@ import {
   type Payment,
   type NotificationItem,
 } from "@/lib/data";
-import logo from "@/assets/logo.png.asset.json";
+import { APP_LOGO } from "@/lib/logo";
 
 export const Route = createFileRoute("/join")({
   ssr: false,
@@ -49,6 +49,26 @@ export const Route = createFileRoute("/join")({
       "Join your mess table ledger using your invitation link or 6-digit code.",
     ),
   component: JoinMessPage,
+  errorComponent: ({ error }) => (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="max-w-md text-center">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          Unable to load invitation
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {error instanceof Error ? error.message : "Please check your invitation code or link."}
+        </p>
+        <div className="mt-6 flex justify-center gap-2">
+          <a
+            href="/"
+            className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground"
+          >
+            Go home
+          </a>
+        </div>
+      </div>
+    </div>
+  ),
 });
 
 function JoinMessPage() {
@@ -68,7 +88,7 @@ function JoinMessPage() {
   });
   const [manualInput, setManualInput] = useState("");
 
-  // Reactive members list from server / cloud / storage
+  // Reactive members list from server / cloud / storage / invite link
   const [membersList, setMembersList] = useState<Member[]>(() => {
     if (typeof window !== "undefined") {
       const parsed = parseInviteFromUrl(window.location.search);
@@ -76,6 +96,9 @@ function JoinMessPage() {
         const stored = getStoredMess(parsed.id);
         if (stored?.members && stored.members.length > 0) {
           return stored.members;
+        }
+        if (parsed.members && parsed.members.length > 0) {
+          return parsed.members as Member[];
         }
       }
     }
@@ -147,21 +170,26 @@ function JoinMessPage() {
           ],
         };
 
-        const adminMember: Member = {
-          id: `mem_admin_${parsed.id.slice(-6)}`,
-          user_id: newMess.owner_id,
-          role: "admin",
-          name: parsed.manager,
-          phone: "",
-          room: "A-1",
-          joined: new Date().toISOString().slice(0, 10),
-          status: "active",
-          tone: "primary",
-        };
+        const initialMembers: Member[] =
+          parsed.members && parsed.members.length > 0
+            ? (parsed.members as Member[])
+            : [
+                {
+                  id: `mem_admin_${parsed.id.slice(-6)}`,
+                  user_id: newMess.owner_id,
+                  role: "admin",
+                  name: parsed.manager,
+                  phone: "",
+                  room: "A-1",
+                  joined: new Date().toISOString().slice(0, 10),
+                  status: "active",
+                  tone: "primary",
+                },
+              ];
 
         const newRecord: MessRecord = {
           mess: newMess,
-          members: [adminMember],
+          members: initialMembers,
           meals: [],
           expenses: [],
           payments: [],
@@ -169,7 +197,7 @@ function JoinMessPage() {
             {
               id: `ntf_${Date.now()}`,
               mess_id: parsed.id,
-              sender_id: adminMember.id,
+              sender_id: initialMembers[0]?.id || `mem_admin_${parsed.id.slice(-6)}`,
               recipient_id: null,
               title: `Welcome to ${parsed.name}! 🎉`,
               message: `You've joined ${parsed.name} managed by ${parsed.manager}.`,
@@ -180,7 +208,7 @@ function JoinMessPage() {
         };
 
         saveStoredMess(parsed.id, newRecord);
-        setMembersList([adminMember]);
+        setMembersList(initialMembers);
       }
 
       // Try server function first to get latest members
@@ -307,8 +335,10 @@ function JoinMessPage() {
       manager: inviteData.manager,
       code: inviteData.code,
       currency: inviteData.currency,
+      memberCount: displayCount,
+      members: membersList,
     });
-  }, [inviteData]);
+  }, [inviteData, displayCount, membersList]);
 
   // Copy functions
   const copyInviteLink = async () => {
@@ -417,9 +447,16 @@ function JoinMessPage() {
             "Other household",
           ],
         };
+        const fallbackMembers: Member[] =
+          membersList.length > 0
+            ? [...membersList]
+            : inviteData.members && inviteData.members.length > 0
+              ? [...(inviteData.members as Member[])]
+              : [];
+
         currentRecord = {
           mess: newMess,
-          members: [],
+          members: fallbackMembers,
           meals: [],
           expenses: [],
           payments: [],
@@ -575,7 +612,14 @@ function JoinMessPage() {
     <div className="mx-auto flex min-h-screen max-w-2xl flex-col px-4 py-8 sm:px-6">
       <header className="mb-8 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <img src={logo.url} className="h-10 w-10 rounded-xl shadow-xs" alt="Mess Manager" />
+          <img
+            src={APP_LOGO}
+            className="h-10 w-10 rounded-xl object-cover shadow-xs"
+            alt="Mess Manager"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = "/logo.png";
+            }}
+          />
           <span className="text-xl font-black tracking-tight">Mess Manager</span>
         </Link>
         {adminSession ? (

@@ -57,16 +57,23 @@ describe("Mess Invitation Link and Token System", () => {
     expect(parsed1?.name).toBe("Sunrise Mess");
     expect(parsed1?.code).toBe("112233");
 
-    // 3. With memberCount
+    // 3. With memberCount and members
     const linkWithMc = createMessInviteLink({
       id: "mess_xyz",
       name: "Green House",
       manager: "Rafiq",
       code: "998877",
       memberCount: 3,
+      members: [
+        { id: "m1", name: "Rafiq", role: "admin", status: "active" },
+        { id: "m2", name: "Joy", role: "member", status: "active" },
+        { id: "m3", name: "Kashif", role: "member", status: "active" },
+      ],
     });
     expect(linkWithMc).toContain("mc=3");
     const parsed3 = parseInviteFromUrl(`?${linkWithMc.split("?")[1]}`);
     expect(parsed3?.memberCount).toBe(3);
+    expect(parsed3?.members).toHaveLength(3);
+    expect(parsed3?.members?.[1]?.name).toBe("Joy");
   });
 });

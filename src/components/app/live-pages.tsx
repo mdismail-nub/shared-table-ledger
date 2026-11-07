@@ -241,7 +241,7 @@ export function DashboardPage() {
           {monthLabel(w.month)} · {w.isAdmin ? "Admin overview" : "Member overview (View-Only)"}
         </p>
         <h1 className="mt-2 text-3xl font-extrabold">
-          Welcome, {w.own?.name.split(" ")[0] ?? "housemate"}.
+          Welcome, {w.own?.name?.split(" ")[0] ?? "housemate"}.
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
           {w.mess?.name} · A good month starts around the table.
@@ -287,6 +287,8 @@ export function DashboardPage() {
                     manager: w.mess?.manager || "",
                     code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
+                    memberCount: w.members.filter((m) => m.status !== "left").length,
+                    members: w.members,
                   });
                   await navigator.clipboard.writeText(link);
                   toast.success("Invitation link copied!");
@@ -306,6 +308,8 @@ export function DashboardPage() {
                     manager: w.mess?.manager || "",
                     code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
+                    memberCount: w.members.filter((m) => m.status !== "left").length,
+                    members: w.members,
                   });
                   const msg = encodeURIComponent(
                     `Join our mess "${w.mess?.name}" on Mess Manager:\n${link}`,
@@ -442,6 +446,7 @@ export function MembersPage() {
                     code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
                     memberCount: activeCount,
+                    members: w.members,
                   });
                   await navigator.clipboard.writeText(url);
                   toast.success("Invitation link copied!");
@@ -462,6 +467,7 @@ export function MembersPage() {
                     code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
                     memberCount: activeCount,
+                    members: w.members,
                   });
                   const msg = encodeURIComponent(
                     `Join our mess "${w.mess?.name}" on Mess Manager:\n${url}`,
@@ -1167,6 +1173,8 @@ export function SettingsPage() {
                   manager: w.mess?.manager || "",
                   code: invite.data || "",
                   currency: w.mess?.currency,
+                  memberCount: w.members.filter((m) => m.status !== "left").length,
+                  members: w.members,
                 });
                 await navigator.clipboard.writeText(link);
                 toast.success("Direct invitation link copied!");
@@ -1186,6 +1194,8 @@ export function SettingsPage() {
                   manager: w.mess?.manager || "",
                   code: invite.data || "",
                   currency: w.mess?.currency,
+                  memberCount: w.members.filter((m) => m.status !== "left").length,
+                  members: w.members,
                 });
                 const msg = encodeURIComponent(
                   `Join our mess "${w.mess?.name}" on Mess Manager:\n${link}`,

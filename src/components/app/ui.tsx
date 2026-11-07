@@ -133,7 +133,7 @@ export function Avatar({
   tone?: Tone;
   size?: "sm" | "md" | "lg";
 }) {
-  const initials = name
+  const initials = (name || "?")
     .split(" ")
     .map((p) => p[0])
     .slice(0, 2)

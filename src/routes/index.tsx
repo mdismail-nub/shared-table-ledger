@@ -32,7 +32,7 @@ import { createMessInviteLink } from "@/lib/invite";
 import welcome from "@/assets/onboard-welcome.png";
 import admin from "@/assets/role-admin.png";
 import member from "@/assets/role-member.png";
-import logo from "@/assets/logo.png.asset.json";
+import { APP_LOGO } from "@/lib/logo";
 
 export const Route = createFileRoute("/")({
   head: () =>
@@ -351,7 +351,7 @@ function Welcome() {
           id: `mem_${res.owner_id.slice(0, 8)}`,
           user_id: res.owner_id,
           role: "admin" as const,
-          name,
+          name: manager,
           phone: "",
           room: "A-1",
           joined: new Date().toISOString().slice(0, 10),
@@ -497,7 +497,14 @@ function Welcome() {
     <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-5 py-6 sm:px-8">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src={logo.url} className="h-10 w-10 rounded-xl" alt="" />
+          <img
+            src={APP_LOGO}
+            className="h-10 w-10 rounded-xl object-cover shadow-xs"
+            alt="Mess Manager"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = "/logo.png";
+            }}
+          />
           <span className="text-lg font-extrabold">Mess Manager</span>
         </div>
         <span className="text-xs text-muted-foreground">Better together.</span>
@@ -785,6 +792,16 @@ function Welcome() {
                       name: createdMess.name,
                       manager: createdMess.manager,
                       code: createdMess.code,
+                      memberCount: 1,
+                      members: [
+                        {
+                          id: `mem_${createdMess.id.slice(0, 8)}`,
+                          name: createdMess.manager,
+                          role: "admin",
+                          status: "active",
+                          room: "A-1",
+                        },
+                      ],
                     })}
                     className="bg-background font-mono text-xs"
                   />
@@ -795,6 +812,16 @@ function Welcome() {
                         name: createdMess.name,
                         manager: createdMess.manager,
                         code: createdMess.code,
+                        memberCount: 1,
+                        members: [
+                          {
+                            id: `mem_${createdMess.id.slice(0, 8)}`,
+                            name: createdMess.manager,
+                            role: "admin",
+                            status: "active",
+                            room: "A-1",
+                          },
+                        ],
                       });
                       await navigator.clipboard.writeText(link);
                       toast.success("Invitation link copied!");
@@ -812,6 +839,16 @@ function Welcome() {
                         name: createdMess.name,
                         manager: createdMess.manager,
                         code: createdMess.code,
+                        memberCount: 1,
+                        members: [
+                          {
+                            id: `mem_${createdMess.id.slice(0, 8)}`,
+                            name: createdMess.manager,
+                            role: "admin",
+                            status: "active",
+                            room: "A-1",
+                          },
+                        ],
                       });
                       const msg = encodeURIComponent(
                         `Join our mess "${createdMess.name}" on Mess Manager:\n${link}`,
@@ -840,6 +877,16 @@ function Welcome() {
                     name: createdMess.name,
                     manager: createdMess.manager,
                     code: createdMess.code,
+                    memberCount: 1,
+                    members: [
+                      {
+                        id: `mem_${createdMess.id.slice(0, 8)}`,
+                        name: createdMess.manager,
+                        role: "admin",
+                        status: "active",
+                        room: "A-1",
+                      },
+                    ],
                   })}
                 >
                   <Button variant="outline" className="w-full gap-2">

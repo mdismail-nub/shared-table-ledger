@@ -13,7 +13,7 @@ import {
   LogOut,
   MoreHorizontal,
 } from "lucide-react";
-import logo from "@/assets/logo.png.asset.json";
+import { APP_LOGO } from "@/lib/logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -80,7 +80,14 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen lg:flex">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-sidebar p-5 lg:flex">
         <Link to="/dashboard" className="flex items-center gap-3">
-          <img src={logo.url} className="h-10 w-10 rounded-xl" alt="" />
+          <img
+            src={APP_LOGO}
+            className="h-10 w-10 rounded-xl object-cover shadow-xs"
+            alt="Mess Manager"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).src = "/logo.png";
+            }}
+          />
           <span className="font-extrabold">Mess Manager</span>
         </Link>
         <p className="mt-6 truncate text-xs font-semibold text-muted-foreground">{w.mess?.name}</p>
@@ -113,7 +120,14 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-7">
             <div className="flex min-w-0 items-center gap-3">
-              <img src={logo.url} className="h-9 w-9 rounded-xl lg:hidden" alt="Mess Manager" />
+              <img
+                src={APP_LOGO}
+                className="h-9 w-9 rounded-xl object-cover lg:hidden"
+                alt="Mess Manager"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = "/logo.png";
+                }}
+              />
               <div className="min-w-0">
                 <h1 className="truncate font-bold sm:text-lg">
                   {nav.find((n) => active(n.to))?.label ?? "Mess Manager"}

@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft, Mail, Lock, User, Home, ShieldCheck, Sparkles } from "lucide-react";
-import logo from "@/assets/logo.png.asset.json";
+import { APP_LOGO } from "@/lib/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -71,6 +71,16 @@ function AuthPage() {
         manager: name,
         code,
         currency,
+        memberCount: 1,
+        members: [
+          {
+            id: `mem_${session.userId.slice(0, 8)}`,
+            name,
+            role: "admin",
+            status: "active",
+            room: "A-1",
+          },
+        ],
       });
       if (typeof window !== "undefined") {
         window.location.href = inviteUrl;
@@ -95,9 +105,12 @@ function AuthPage() {
         <div className="flex items-center gap-3">
           <span className="h-12 w-12 overflow-hidden rounded-2xl bg-primary/10 flex items-center justify-center">
             <img
-              src={logo.url}
+              src={APP_LOGO}
               alt="Mess Manager logo"
-              className="h-full w-full scale-[1.6] object-cover"
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "/logo.png";
+              }}
             />
           </span>
           <div>
