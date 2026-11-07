@@ -1,0 +1,18 @@
+create table public.mess_user_roles (user_id uuid primary key, mess_id uuid not null references public.messes(id) on delete cascade, role text not null check (role in ('admin','member')));
+grant select on public.mess_user_roles to authenticated;
+grant all on public.mess_user_roles to service_role;
+alter table public.mess_user_roles enable row level security;
+create policy "read own role" on public.mess_user_roles for select to authenticated using (user_id = auth.uid());
+insert into public.mess_user_roles(user_id,mess_id,role) select user_id,mess_id,role from public.mess_members where user_id is not null;
+create or replace function public.is_mess_admin(_mess uuid) returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from public.mess_user_roles where user_id=auth.uid() and mess_id=_mess and role='admin') $$;
+create or replace function public.sync_mess_role() returns trigger language plpgsql security definer set search_path=public as $$ begin if new.user_id is not null then insert into public.mess_user_roles(user_id,mess_id,role) values(new.user_id,new.mess_id,case when exists(select 1 from public.messes where id=new.mess_id and owner_id=new.user_id) then 'admin' else 'member' end); end if; return new; end $$;
+create trigger sync_mess_member_role after insert on public.mess_members for each row execute function public.sync_mess_role();
+revoke all on function public.sync_mess_role() from public,anon,authenticated;
+create or replace function public.validate_mess_record() returns trigger language plpgsql set search_path=public as $$ begin if new.member_id is not null and not exists(select 1 from public.mess_members where id=new.member_id and mess_id=new.mess_id) then raise exception 'Member belongs to another mess'; end if; return new; end $$;
+create trigger validate_meal_member before insert or update on public.mess_meals for each row execute function public.validate_mess_record();
+create trigger validate_expense_member before insert or update on public.mess_expenses for each row execute function public.validate_mess_record();
+create trigger validate_payment_member before insert or update on public.payments for each row execute function public.validate_mess_record();
+drop policy "read mess payments" on public.payments;
+create policy "read permitted payments" on public.payments for select to authenticated using (mess_id=public.my_mess_id() and (public.is_mess_admin(mess_id) or exists(select 1 from public.mess_members where id=member_id and user_id=auth.uid())));
+create policy "prevent linking other accounts" on public.mess_members as restrictive for insert to authenticated with check(user_id is null);
+create policy "protect admin membership" on public.mess_members as restrictive for update to authenticated using(role <> 'admin') with check(role <> 'admin');
