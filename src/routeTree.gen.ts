@@ -10,23 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as DepositsRouteImport } from './routes/deposits'
-import { Route as ExpensesRouteImport } from './routes/expenses'
-import { Route as MealsRouteImport } from './routes/meals'
-import { Route as MembersRouteImport } from './routes/members'
-import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as AuthenticatedAccountsRouteImport } from './routes/_authenticated/accounts'
+import { Route as AuthenticatedDepositsRouteImport } from './routes/_authenticated/deposits'
+import { Route as AuthenticatedExpensesRouteImport } from './routes/_authenticated/expenses'
+import { Route as AuthenticatedMealsRouteImport } from './routes/_authenticated/meals'
+import { Route as AuthenticatedMembersRouteImport } from './routes/_authenticated/members'
+import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountsRoute = AccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -34,77 +29,82 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DepositsRoute = DepositsRouteImport.update({
-  id: '/deposits',
+const AuthenticatedAccountsRoute = AuthenticatedAccountsRouteImport.update({
+  id: '/_authenticated/accounts',
+  path: '/accounts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedDepositsRoute = AuthenticatedDepositsRouteImport.update({
+  id: '/_authenticated/deposits',
   path: '/deposits',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ExpensesRoute = ExpensesRouteImport.update({
-  id: '/expenses',
+const AuthenticatedExpensesRoute = AuthenticatedExpensesRouteImport.update({
+  id: '/_authenticated/expenses',
   path: '/expenses',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MealsRoute = MealsRouteImport.update({
-  id: '/meals',
+const AuthenticatedMealsRoute = AuthenticatedMealsRouteImport.update({
+  id: '/_authenticated/meals',
   path: '/meals',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MembersRoute = MembersRouteImport.update({
-  id: '/members',
+const AuthenticatedMembersRoute = AuthenticatedMembersRouteImport.update({
+  id: '/_authenticated/members',
   path: '/members',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ReportsRoute = ReportsRouteImport.update({
-  id: '/reports',
+const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
+  id: '/_authenticated/reports',
   path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/_authenticated/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/accounts': typeof AccountsRoute
   '/auth': typeof AuthRoute
-  '/deposits': typeof DepositsRoute
-  '/expenses': typeof ExpensesRoute
-  '/meals': typeof MealsRoute
-  '/members': typeof MembersRoute
-  '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/accounts': typeof AuthenticatedAccountsRoute
+  '/deposits': typeof AuthenticatedDepositsRoute
+  '/expenses': typeof AuthenticatedExpensesRoute
+  '/meals': typeof AuthenticatedMealsRoute
+  '/members': typeof AuthenticatedMembersRoute
+  '/reports': typeof AuthenticatedReportsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/accounts': typeof AccountsRoute
   '/auth': typeof AuthRoute
-  '/deposits': typeof DepositsRoute
-  '/expenses': typeof ExpensesRoute
-  '/meals': typeof MealsRoute
-  '/members': typeof MembersRoute
-  '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/accounts': typeof AuthenticatedAccountsRoute
+  '/deposits': typeof AuthenticatedDepositsRoute
+  '/expenses': typeof AuthenticatedExpensesRoute
+  '/meals': typeof AuthenticatedMealsRoute
+  '/members': typeof AuthenticatedMembersRoute
+  '/reports': typeof AuthenticatedReportsRoute
+  '/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/accounts': typeof AccountsRoute
   '/auth': typeof AuthRoute
-  '/deposits': typeof DepositsRoute
-  '/expenses': typeof ExpensesRoute
-  '/meals': typeof MealsRoute
-  '/members': typeof MembersRoute
-  '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/_authenticated/accounts': typeof AuthenticatedAccountsRoute
+  '/_authenticated/deposits': typeof AuthenticatedDepositsRoute
+  '/_authenticated/expenses': typeof AuthenticatedExpensesRoute
+  '/_authenticated/meals': typeof AuthenticatedMealsRoute
+  '/_authenticated/members': typeof AuthenticatedMembersRoute
+  '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/accounts'
     | '/auth'
+    | '/accounts'
     | '/deposits'
     | '/expenses'
     | '/meals'
@@ -114,8 +114,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/accounts'
     | '/auth'
+    | '/accounts'
     | '/deposits'
     | '/expenses'
     | '/meals'
@@ -125,26 +125,26 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/accounts'
     | '/auth'
-    | '/deposits'
-    | '/expenses'
-    | '/meals'
-    | '/members'
-    | '/reports'
-    | '/settings'
+    | '/_authenticated/accounts'
+    | '/_authenticated/deposits'
+    | '/_authenticated/expenses'
+    | '/_authenticated/meals'
+    | '/_authenticated/members'
+    | '/_authenticated/reports'
+    | '/_authenticated/settings'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AccountsRoute: typeof AccountsRoute
   AuthRoute: typeof AuthRoute
-  DepositsRoute: typeof DepositsRoute
-  ExpensesRoute: typeof ExpensesRoute
-  MealsRoute: typeof MealsRoute
-  MembersRoute: typeof MembersRoute
-  ReportsRoute: typeof ReportsRoute
-  SettingsRoute: typeof SettingsRoute
+  AuthenticatedAccountsRoute: typeof AuthenticatedAccountsRoute
+  AuthenticatedDepositsRoute: typeof AuthenticatedDepositsRoute
+  AuthenticatedExpensesRoute: typeof AuthenticatedExpensesRoute
+  AuthenticatedMealsRoute: typeof AuthenticatedMealsRoute
+  AuthenticatedMembersRoute: typeof AuthenticatedMembersRoute
+  AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -156,13 +156,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/accounts': {
-      id: '/accounts'
-      path: '/accounts'
-      fullPath: '/accounts'
-      preLoaderRoute: typeof AccountsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -170,46 +163,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/deposits': {
-      id: '/deposits'
+    '/_authenticated/accounts': {
+      id: '/_authenticated/accounts'
+      path: '/accounts'
+      fullPath: '/accounts'
+      preLoaderRoute: typeof AuthenticatedAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/deposits': {
+      id: '/_authenticated/deposits'
       path: '/deposits'
       fullPath: '/deposits'
-      preLoaderRoute: typeof DepositsRouteImport
+      preLoaderRoute: typeof AuthenticatedDepositsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/expenses': {
-      id: '/expenses'
+    '/_authenticated/expenses': {
+      id: '/_authenticated/expenses'
       path: '/expenses'
       fullPath: '/expenses'
-      preLoaderRoute: typeof ExpensesRouteImport
+      preLoaderRoute: typeof AuthenticatedExpensesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/meals': {
-      id: '/meals'
+    '/_authenticated/meals': {
+      id: '/_authenticated/meals'
       path: '/meals'
       fullPath: '/meals'
-      preLoaderRoute: typeof MealsRouteImport
+      preLoaderRoute: typeof AuthenticatedMealsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/members': {
-      id: '/members'
+    '/_authenticated/members': {
+      id: '/_authenticated/members'
       path: '/members'
       fullPath: '/members'
-      preLoaderRoute: typeof MembersRouteImport
+      preLoaderRoute: typeof AuthenticatedMembersRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reports': {
-      id: '/reports'
+    '/_authenticated/reports': {
+      id: '/_authenticated/reports'
       path: '/reports'
       fullPath: '/reports'
-      preLoaderRoute: typeof ReportsRouteImport
+      preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings': {
-      id: '/settings'
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -217,14 +217,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AccountsRoute: AccountsRoute,
   AuthRoute: AuthRoute,
-  DepositsRoute: DepositsRoute,
-  ExpensesRoute: ExpensesRoute,
-  MealsRoute: MealsRoute,
-  MembersRoute: MembersRoute,
-  ReportsRoute: ReportsRoute,
-  SettingsRoute: SettingsRoute,
+  AuthenticatedAccountsRoute: AuthenticatedAccountsRoute,
+  AuthenticatedDepositsRoute: AuthenticatedDepositsRoute,
+  AuthenticatedExpensesRoute: AuthenticatedExpensesRoute,
+  AuthenticatedMealsRoute: AuthenticatedMealsRoute,
+  AuthenticatedMembersRoute: AuthenticatedMembersRoute,
+  AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -9,7 +9,7 @@ import { PageIntro, Panel, PanelHeader } from "@/components/app/ui";
 import { householdCategories, mealCategories } from "@/lib/mock-data";
 import { pageMeta } from "@/lib/meta";
 
-export const Route = createFileRoute("/settings")({
+export const Route = createFileRoute("/_authenticated/settings")({
   head: () => pageMeta("Settings", "Mess details, categories and accounting rules."),
   component: Page,
 });

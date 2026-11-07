@@ -9,7 +9,7 @@ import { expenses, foodTotal, householdTotal, memberById } from "@/lib/mock-data
 import { pageMeta } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/expenses")({
+export const Route = createFileRoute("/_authenticated/expenses")({
   head: () => pageMeta("Expenses", "Bazar purchases and household bills."),
   component: Page,
 });

@@ -6,7 +6,7 @@ import { Avatar, Money, PageIntro, Panel, PanelHeader, StatusBadge } from "@/com
 import { foodTotal, householdTotal, ledger, members, rate, sharedShare, totalMeals } from "@/lib/mock-data";
 import { pageMeta } from "@/lib/meta";
 
-export const Route = createFileRoute("/accounts")({
+export const Route = createFileRoute("/_authenticated/accounts")({
   head: () => pageMeta("Monthly Accounts", "Meal rate, dues and balance settlement."),
   component: Page,
 });

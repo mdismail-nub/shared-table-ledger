@@ -9,7 +9,7 @@ import { ledger, rate } from "@/lib/mock-data";
 import { pageMeta } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/members")({
+export const Route = createFileRoute("/_authenticated/members")({
   head: () => pageMeta("Members", "Member profiles and individual accounts."),
   component: Page,
 });

@@ -6,7 +6,7 @@ import { AddDepositDialog } from "@/components/app/dialogs";
 import { depositTotal, deposits, ledger, memberById, outstanding } from "@/lib/mock-data";
 import { pageMeta } from "@/lib/meta";
 
-export const Route = createFileRoute("/deposits")({
+export const Route = createFileRoute("/_authenticated/deposits")({
   head: () => pageMeta("Deposits", "Deposits, withdrawals and payment history."),
   component: Page,
 });

@@ -8,7 +8,7 @@ import { categoryBreakdown, ledger, monthlyTrend } from "@/lib/mock-data";
 import { pageMeta } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/reports")({
+export const Route = createFileRoute("/_authenticated/reports")({
   head: () => pageMeta("Reports", "Charts, statements and exports."),
   component: Page,
 });

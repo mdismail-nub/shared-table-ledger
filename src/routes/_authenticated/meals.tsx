@@ -9,7 +9,7 @@ import { pageMeta } from "@/lib/meta";
 import { cn } from "@/lib/utils";
 import { UtensilsCrossed, Calculator, Users } from "lucide-react";
 
-export const Route = createFileRoute("/meals")({
+export const Route = createFileRoute("/_authenticated/meals")({
   head: () => pageMeta("Meals", "Daily meal entry and monthly totals."),
   component: Page,
 });
