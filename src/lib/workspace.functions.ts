@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start';
 import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
-import { monthRange } from './data';
+function monthRange(m:string){const [y,mo]=m.split('-').map(Number); const next=mo===12?`${y+1}-01`:`${y}-${String(mo+1).padStart(2,'0')}`;return {start:`${m}-01`,end:`${next}-01`};}
 export const loadWorkspace = createServerFn({ method: 'POST' }).middleware([requireSupabaseAuth]).inputValidator((v: { month: string }) => {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(v.month)) throw new Error('Invalid month'); return v;
 }).handler(async ({ data, context }) => {
