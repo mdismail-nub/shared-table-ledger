@@ -1,32 +1,18 @@
 # Shared Table Ledger
 
-I have uploaded the ui kit and logo for my website called mess manager.  And here is the features breakdown i want you to generate the website.  Focus on ui ux mainly because i will do the remaining work later but for now i want an amazing ui ux for the website . Mess Manager — Complete Feature Plan
-
-
+I have uploaded the ui kit and logo for my website called mess manager. And here is the features breakdown i want you to generate the website. Focus on ui ux mainly because i will do the remaining work later but for now i want an amazing ui ux for the website . Mess Manager — Complete Feature Plan
 
 Project Overview
 
-
-
 Mess Manager is a modern, responsive web application designed to help students, roommates, and shared households manage meals, groceries, deposits, shared expenses, and monthly accounts.
-
-
 
 The primary goal is to make mess accounting transparent and simple. Every member should be able to understand how much they spent, how much they owe, and how their monthly meal cost is calculated.
 
-
-
 1. Dashboard
-
-
 
 The dashboard provides a complete overview of the current month's financial activity.
 
-
-
 Overview Cards
-
-
 
 - Total monthly expenses
 
@@ -40,11 +26,7 @@ Overview Cards
 
 - Outstanding member balances
 
-
-
 Financial Insights
-
-
 
 - Daily and monthly spending charts
 
@@ -56,15 +38,9 @@ Financial Insights
 
 - Meal consumption statistics
 
-
-
 Recent Activity
 
-
-
 Display recently recorded:
-
-
 
 - Bazar expenses
 
@@ -76,23 +52,13 @@ Display recently recorded:
 
 - Account adjustments
 
-
-
 Each activity should include its date, amount, category, and associated member.
-
-
 
 2. Member Management
 
-
-
 Every mess member should have an individual financial profile.
 
-
-
 Features
-
-
 
 - Add, edit, and remove members
 
@@ -110,15 +76,9 @@ Features
 
 - Support members joining or leaving during a month
 
-
-
 Member Profile Summary
 
-
-
 Each member profile should display:
-
-
 
 - Total meals consumed
 
@@ -132,19 +92,11 @@ Each member profile should display:
 
 - Complete transaction history
 
-
-
 3. Meal Management
-
-
 
 The meal management module records each member's daily meal consumption.
 
-
-
 Features
-
-
 
 - Record breakfast, lunch, and dinner
 
@@ -162,27 +114,15 @@ Features
 
 - Allow authorized users to correct previous entries
 
-
-
 The interface should make it possible to update multiple members' meals quickly without opening a separate form for every member.
-
-
 
 4. Expense and Bazar Management
 
-
-
 Expenses must be divided into two separate categories to ensure accurate accounting.
-
-
 
 A. Meal Expenses
 
-
-
 Examples:
-
-
 
 - Rice
 
@@ -198,19 +138,11 @@ Examples:
 
 - Other food-related purchases
 
-
-
 These expenses contribute to the monthly meal-rate calculation.
-
-
 
 B. Shared Household Expenses
 
-
-
 Examples:
-
-
 
 - Wi-Fi bills
 
@@ -224,15 +156,9 @@ Examples:
 
 - Other agreed household costs
 
-
-
 These expenses must be tracked separately and excluded from the meal-rate calculation.
 
-
-
 Expense Management Features
-
-
 
 - Add, edit, and delete expenses
 
@@ -248,23 +174,13 @@ Expense Management Features
 
 - Maintain an audit trail for corrections and deletions
 
-
-
 Important accounting rule: Wi-Fi, electricity, gas, and other shared household bills must never accidentally increase the meal rate.
-
-
 
 5. Deposit and Payment Management
 
-
-
 This module tracks money received from members and payments made for mess expenses.
 
-
-
 Features
-
-
 
 - Record member deposits
 
@@ -282,71 +198,39 @@ Features
 
 - Compare total deposits against total member charges
 
-
-
 Deposits represent money received from members, not expenses. They should increase the member's available credit.
-
-
 
 6. Automatic Monthly Accounting
 
-
-
 The accounting engine calculates the meal rate, individual meal costs, shared expenses, and final member balances.
-
-
 
 Meal Rate Formula
 
-
-
 Meal Rate = Total Meal Expenses / Total Meals
 
-
-
 Example:
-
-
 
 Total Meal Expenses = ৳30,000
 
 Total Meals = 600
 
-
-
 Meal Rate = 30,000 / 600
 
 Meal Rate = ৳50
 
-
-
 Individual Meal Cost
-
-
 
 Member Meal Cost = Member's Total Meals × Meal Rate
 
-
-
 Individual Amount Due
-
-
 
 Amount Due = Meal Cost + Member's Shared Expense Contribution
 
-
-
 Individual Balance
-
-
 
 Member Balance = Total Deposits - Total Amount Due
 
-
-
 Balance Interpretation
-
-
 
 - Positive balance: The member has remaining credit.
 
@@ -354,15 +238,9 @@ Balance Interpretation
 
 - Zero balance: The member's account is settled.
 
-
-
 Shared Expense Allocation
 
-
-
 Support configurable allocation methods:
-
-
 
 - Equal division among eligible members
 
@@ -372,15 +250,9 @@ Support configurable allocation methods:
 
 - Other agreed allocation rules
 
-
-
 The app should clearly display how each member's final amount is calculated.
 
-
-
 Accounting Requirements
-
-
 
 - Exclude shared household bills from food expenses.
 
@@ -394,19 +266,11 @@ Accounting Requirements
 
 - Recalculate affected member balances when authorized corrections occur.
 
-
-
 7. Month-End Closing and Reports
-
-
 
 Provide a dedicated month-end closing screen to summarize the mess's financial status.
 
-
-
 Monthly Summary
-
-
 
 - Total food expenses
 
@@ -422,11 +286,7 @@ Monthly Summary
 
 - Remaining credits and unpaid dues
 
-
-
 Reporting Features
-
-
 
 - Member-by-member financial statements
 
@@ -442,11 +302,7 @@ Reporting Features
 
 - Balance carry-forward to the next month, when applicable
 
-
-
 Month Closing
-
-
 
 - Review all meal records and expenses
 
@@ -460,15 +316,9 @@ Month Closing
 
 - Support authorized corrections with an audit trail
 
-
-
 8. Application Navigation
 
-
-
 The application should include the following main pages:
-
-
 
 Page| Purpose
 
@@ -488,15 +338,9 @@ Reports| Charts, statements, and exports
 
 Settings| Mess details, categories, and accounting rules
 
-
-
 9. UI Kit and Reusable Components
 
-
-
 Build a consistent design system with reusable components.
-
-
 
 Component| Purpose
 
@@ -528,11 +372,7 @@ Loading Skeletons| Improve the experience while data loads
 
 Pagination| Navigate large transaction and member lists
 
-
-
 Visual Design Direction
-
-
 
 - Use a clean white or light background.
 
@@ -552,15 +392,9 @@ Visual Design Direction
 
 - Provide accessible contrast and visible focus states.
 
-
-
 10. Advanced Features
 
-
-
 These features can be introduced after the core accounting workflow is stable.
-
-
 
 - Multiple mess or household workspaces
 
@@ -584,15 +418,9 @@ These features can be introduced after the core accounting workflow is stable.
 
 - Member-specific access to financial statements
 
-
-
 11. Recommended Development Roadmap
 
-
-
 Phase 1 — Foundation
-
-
 
 - Authentication
 
@@ -604,11 +432,7 @@ Phase 1 — Foundation
 
 - Responsive navigation
 
-
-
 Phase 2 — Daily Operations
-
-
 
 - Meal tracking
 
@@ -620,11 +444,7 @@ Phase 2 — Daily Operations
 
 - Payment history
 
-
-
 Phase 3 — Accounting Engine
-
-
 
 - Automatic meal-rate calculation
 
@@ -636,11 +456,7 @@ Phase 3 — Accounting Engine
 
 - Accounting validation and correction rules
 
-
-
 Phase 4 — Reports
-
-
 
 - Financial charts
 
@@ -652,11 +468,7 @@ Phase 4 — Reports
 
 - Month-end closing and archives
 
-
-
 Phase 5 — Polish and Reliability
-
-
 
 - Mobile responsiveness
 
@@ -672,37 +484,27 @@ Phase 5 — Polish and Reliability
 
 - Security and usability improvements
 
-
-
 12. Core Principles
-
-
 
 1. Accurate accounting: All calculations must follow clearly defined rules.
 
-2. Expense separation: Food expenses and household bills must remain separate.
+1. Expense separation: Food expenses and household bills must remain separate.
 
-3. Financial transparency: Members should understand every charge and balance.
+1. Financial transparency: Members should understand every charge and balance.
 
-4. Easy daily use: Recording meals, purchases, and deposits should require minimal effort.
+1. Easy daily use: Recording meals, purchases, and deposits should require minimal effort.
 
-5. Responsive design: The application must work smoothly on mobile devices.
+1. Responsive design: The application must work smoothly on mobile devices.
 
-6. Data integrity: Prevent duplicate transactions, invalid entries, and accidental changes.
+1. Data integrity: Prevent duplicate transactions, invalid entries, and accidental changes.
 
-7. Privacy and permissions: Only authorized users should be able to modify sensitive financial records.
+1. Privacy and permissions: Only authorized users should be able to modify sensitive financial records.
 
-8. Clear reporting: Month-end accounts should be easy to review, export, and verify.
-
-
+1. Clear reporting: Month-end accounts should be easy to review, export, and verify.
 
 Final Recommendation
 
-
-
 Build the first version around four essential workflows:
-
-
 
 1. Record daily meals.
 
@@ -712,11 +514,7 @@ Build the first version around four essential workflows:
 
 4. Calculate the meal rate and each member's final monthly balance automatically.
 
-
-
 Once these workflows are reliable, expand into analytics, advanced reports, notifications, offline support, and multi-mess management.
-
-
 
 The most important requirement is that the meal rate must be calculated only from meal-related expenses, never from Wi-Fi or other shared household bills.
 

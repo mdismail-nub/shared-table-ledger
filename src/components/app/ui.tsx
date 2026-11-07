@@ -17,7 +17,15 @@ export function Panel({ className, children }: { className?: string; children: R
   return <section className={cn("glass rounded-3xl p-4 sm:p-5", className)}>{children}</section>;
 }
 
-export function PanelHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+export function PanelHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="mb-4 flex items-start justify-between gap-3">
       <div className="min-w-0">
@@ -29,7 +37,15 @@ export function PanelHeader({ title, subtitle, action }: { title: string; subtit
   );
 }
 
-export function PageIntro({ title, subtitle, actions }: { title: string; subtitle: string; actions?: ReactNode }) {
+export function PageIntro({
+  title,
+  subtitle,
+  actions,
+}: {
+  title: string;
+  subtitle: string;
+  actions?: ReactNode;
+}) {
   return (
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
@@ -41,16 +57,34 @@ export function PageIntro({ title, subtitle, actions }: { title: string; subtitl
   );
 }
 
-export function StatCard({ label, value, icon: Icon, tone = "primary", delta, hint }: {
-  label: string; value: string; icon: LucideIcon; tone?: Tone; delta?: number; hint?: string;
+export function StatCard({
+  label,
+  value,
+  icon: Icon,
+  tone = "primary",
+  delta,
+  hint,
+}: {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+  tone?: Tone;
+  delta?: number;
+  hint?: string;
 }) {
   return (
     <div className={cn("rounded-2xl p-4 transition-transform hover:-translate-y-0.5", tones[tone])}>
       <div className="flex items-center justify-between">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-card/70"><Icon className="h-[18px] w-[18px]" /></span>
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-card/70">
+          <Icon className="h-[18px] w-[18px]" />
+        </span>
         {delta !== undefined && (
           <span className="flex items-center gap-1 text-xs font-semibold">
-            {delta >= 0 ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+            {delta >= 0 ? (
+              <TrendingUp className="h-3.5 w-3.5" />
+            ) : (
+              <TrendingDown className="h-3.5 w-3.5" />
+            )}
             {Math.abs(delta)}%
           </span>
         )}
@@ -77,23 +111,64 @@ const statusStyles = {
 export type Status = keyof typeof statusStyles;
 
 export function StatusBadge({ status, className }: { status: Status; className?: string }) {
-  return <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold", statusStyles[status], className)}>{status}</span>;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        statusStyles[status],
+        className,
+      )}
+    >
+      {status}
+    </span>
+  );
 }
 
-export function Avatar({ name, tone = "primary", size = "md" }: { name: string; tone?: Tone; size?: "sm" | "md" | "lg" }) {
-  const initials = name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+export function Avatar({
+  name,
+  tone = "primary",
+  size = "md",
+}: {
+  name: string;
+  tone?: Tone;
+  size?: "sm" | "md" | "lg";
+}) {
+  const initials = name
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("");
   return (
-    <span className={cn("grid shrink-0 place-items-center rounded-full font-bold", tones[tone],
-      size === "sm" && "h-8 w-8 text-xs", size === "md" && "h-10 w-10 text-sm", size === "lg" && "h-16 w-16 text-xl")}>
+    <span
+      className={cn(
+        "grid shrink-0 place-items-center rounded-full font-bold",
+        tones[tone],
+        size === "sm" && "h-8 w-8 text-xs",
+        size === "md" && "h-10 w-10 text-sm",
+        size === "lg" && "h-16 w-16 text-xl",
+      )}
+    >
       {initials}
     </span>
   );
 }
 
-export function EmptyState({ icon: Icon, title, text, action }: { icon: LucideIcon; title: string; text: string; action?: ReactNode }) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  text,
+  action,
+}: {
+  icon: LucideIcon;
+  title: string;
+  text: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center rounded-2xl border border-dashed bg-card px-6 py-12 text-center">
-      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-soft text-primary"><Icon className="h-6 w-6" /></span>
+      <span className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-soft text-primary">
+        <Icon className="h-6 w-6" />
+      </span>
       <p className="mt-4 font-bold">{title}</p>
       <p className="mt-1 max-w-xs text-sm text-muted-foreground">{text}</p>
       {action && <div className="mt-4">{action}</div>}
@@ -104,5 +179,15 @@ export function EmptyState({ icon: Icon, title, text, action }: { icon: LucideIc
 export function Money({ value, signed }: { value: number; signed?: boolean }) {
   const s = `৳${Math.abs(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
   if (!signed) return <>{s}</>;
-  return <span className={cn("font-semibold", value < 0 ? "text-destructive" : value > 0 ? "text-success" : "text-muted-foreground")}>{value < 0 ? "−" : value > 0 ? "+" : ""}{s}</span>;
+  return (
+    <span
+      className={cn(
+        "font-semibold",
+        value < 0 ? "text-destructive" : value > 0 ? "text-success" : "text-muted-foreground",
+      )}
+    >
+      {value < 0 ? "−" : value > 0 ? "+" : ""}
+      {s}
+    </span>
+  );
 }

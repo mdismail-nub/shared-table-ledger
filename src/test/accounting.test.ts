@@ -13,10 +13,17 @@ describe("accounting", () => {
   });
   it("ledger counts breakfast+lunch+dinner and deposits per member; left members skip shared bills", () => {
     const rows = buildLedger(
-      [{ id: "a", status: "active" }, { id: "b", status: "left" }],
-      [{ member_id: "a", breakfast: 1, lunch: 1, dinner: 1 }, { member_id: "b", breakfast: 0, lunch: 1, dinner: 0 }],
+      [
+        { id: "a", status: "active" },
+        { id: "b", status: "left" },
+      ],
+      [
+        { member_id: "a", breakfast: 1, lunch: 1, dinner: 1 },
+        { member_id: "b", breakfast: 0, lunch: 1, dinner: 0 },
+      ],
       [{ member_id: "a", amount: 500 }],
-      50, 100,
+      50,
+      100,
     );
     expect(rows[0]).toMatchObject({ meals: 3, deposits: 500, due: 250, balance: 250 });
     expect(rows[1]).toMatchObject({ meals: 1, shared: 0, balance: -50 });

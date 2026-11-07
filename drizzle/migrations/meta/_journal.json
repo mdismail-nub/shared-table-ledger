@@ -22,6 +22,20 @@
       "when": 1794048374013,
       "tag": "0002_harden_mess_roles_and_records",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794048375000,
+      "tag": "0003_fix_security_and_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794048376000,
+      "tag": "0004_notifications_and_guest_read",
+      "breakpoints": true
     }
   ]
 }
