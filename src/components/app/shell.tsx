@@ -42,7 +42,7 @@ const nav = [
 export function AppShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const [month, setMonth] = useState(currentMonth());
-  if (path === "/" || path === "/auth") return children;
+  if (path === "/" || path === "/auth" || path.startsWith("/join")) return children;
   return (
     <MonthContext.Provider value={{ month, setMonth }}>
       <Suspense

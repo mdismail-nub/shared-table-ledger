@@ -8,7 +8,7 @@ import {
 
 describe("Server storage and 6-digit code member joining", () => {
   it("creates a mess with a valid 6-digit invite code and finds it", async () => {
-    const created = serverCreateMess({
+    const created = await serverCreateMess({
       name: "Sunrise Villa",
       manager: "Kabir Hossain",
       address: "Mirpur 10, Dhaka",
@@ -26,7 +26,7 @@ describe("Server storage and 6-digit code member joining", () => {
   });
 
   it("loads workspace data by invite code for members", async () => {
-    const created = serverCreateMess({
+    const created = await serverCreateMess({
       name: "Green Valley Mess",
       manager: "Rafiq",
     });
@@ -44,7 +44,7 @@ describe("Server storage and 6-digit code member joining", () => {
   });
 
   it("allows admin to add members and send custom notifications", async () => {
-    const created = serverCreateMess({
+    const created = await serverCreateMess({
       name: "Bachelor Haven",
       manager: "Admin Hasan",
     });

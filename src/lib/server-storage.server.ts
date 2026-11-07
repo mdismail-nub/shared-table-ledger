@@ -390,7 +390,7 @@ export async function serverLookupMessByCode(code: string) {
   };
 }
 
-export function serverCreateMess(params: {
+export async function serverCreateMess(params: {
   name: string;
   address?: string;
   manager: string;
@@ -462,11 +462,12 @@ export function serverCreateMess(params: {
 
   writeDatabase(db);
 
-  import("./cloud-sync")
-    .then(({ publishMessToCloud }) => {
-      publishMessToCloud(newRecord).catch(() => {});
-    })
-    .catch(() => {});
+  try {
+    const { publishMessToCloud } = await import("./cloud-sync");
+    await publishMessToCloud(newRecord);
+  } catch {
+    // ignore
+  }
 
   return {
     id: messId,
@@ -616,7 +617,7 @@ export function serverSaveRecord(params: {
   return { ok: true };
 }
 
-export function serverSyncMessRecord(record: MessRecord) {
+export async function serverSyncMessRecord(record: MessRecord) {
   const db = readDatabase();
   const messId = record.mess.id;
   const invite = (record.mess as unknown as { invite_code?: string })?.invite_code;
@@ -626,11 +627,12 @@ export function serverSyncMessRecord(record: MessRecord) {
   }
   writeDatabase(db);
 
-  import("./cloud-sync")
-    .then(({ publishMessToCloud }) => {
-      publishMessToCloud(record).catch(() => {});
-    })
-    .catch(() => {});
+  try {
+    const { publishMessToCloud } = await import("./cloud-sync");
+    await publishMessToCloud(record);
+  } catch {
+    // ignore
+  }
 
   return { ok: true };
 }

@@ -358,7 +358,7 @@ function Welcome() {
           status: "active" as const,
           tone: "primary" as const,
         };
-        saveStoredMess(res.id, {
+        const createdRecord = {
           mess: newMess,
           members: [adminMember],
           meals: [],
@@ -372,11 +372,19 @@ function Welcome() {
               recipient_id: null,
               title: "Mess Created Successfully 🎉",
               message: `Welcome to ${name}! Share your 6-digit invitation code (${res.invite_code}) with your housemates.`,
-              type: "notice",
+              type: "notice" as const,
               created_at: new Date().toISOString(),
             },
           ],
-        });
+        };
+        saveStoredMess(res.id, createdRecord);
+
+        try {
+          const { publishMessToCloud } = await import("@/lib/cloud-sync");
+          await publishMessToCloud(createdRecord);
+        } catch {
+          // ignore
+        }
 
         setCreated(res.invite_code);
         setCreatedMess({
@@ -666,6 +674,14 @@ function Welcome() {
                       placeholder="000000"
                       className="mt-2 h-16 bg-card text-center text-3xl font-bold tracking-[0.35em]"
                     />
+                    <div className="mt-3 text-center">
+                      <Link
+                        to="/join"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                      >
+                        🔗 Have a direct invitation link? Click here to join via link →
+                      </Link>
+                    </div>
                   </div>
 
                   {messInfo && (

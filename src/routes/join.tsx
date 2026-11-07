@@ -33,6 +33,7 @@ import { getMemberSession, setMemberSession, type Member, type Mess } from "@/li
 import logo from "@/assets/logo.png.asset.json";
 
 export const Route = createFileRoute("/join")({
+  ssr: false,
   head: () =>
     pageMeta(
       "Join Mess",
@@ -137,6 +138,16 @@ function JoinMessPage() {
 
         saveStoredMess(parsed.id, newRecord);
       }
+
+      // Try to fetch full record from cloud if available (to get any pre-added members)
+      import("@/lib/cloud-sync")
+        .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(parsed.code))
+        .then((cloud) => {
+          if (cloud) {
+            saveStoredMess(cloud.mess.id, cloud);
+          }
+        })
+        .catch(() => {});
     } else {
       // Check if URL has ?code=XXXXXX
       const params = new URLSearchParams(window.location.search);
