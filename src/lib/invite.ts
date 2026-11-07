@@ -4,6 +4,7 @@ export interface InvitePayload {
   manager: string;
   code: string;
   currency?: string | undefined;
+  memberCount?: number | undefined;
   timestamp?: number | undefined;
 }
 
@@ -63,6 +64,7 @@ export function createMessInviteLink(params: {
   manager: string;
   code: string;
   currency?: string | undefined;
+  memberCount?: number | undefined;
 }): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const token = encodeInviteToken({
@@ -71,6 +73,7 @@ export function createMessInviteLink(params: {
     manager: params.manager,
     code: params.code,
     currency: params.currency || "BDT (৳)",
+    memberCount: params.memberCount,
     timestamp: Date.now(),
   });
 
@@ -82,6 +85,10 @@ export function createMessInviteLink(params: {
     mgr: params.manager,
     code: params.code,
   });
+
+  if (typeof params.memberCount === "number" && params.memberCount > 0) {
+    query.set("mc", String(params.memberCount));
+  }
 
   return `${origin}/join?${query.toString()}`;
 }
@@ -104,6 +111,8 @@ export function parseInviteFromUrl(search: string): InvitePayload | null {
     const manager = params.get("mgr") || params.get("manager");
     const code = params.get("code");
     const currency = params.get("cur") || params.get("currency") || "BDT (৳)";
+    const mc = params.get("mc");
+    const memberCount = mc ? Number(mc) : undefined;
 
     if (id || name || code) {
       return {
@@ -112,6 +121,8 @@ export function parseInviteFromUrl(search: string): InvitePayload | null {
         manager: manager || "Admin",
         code: code || "123456",
         currency,
+        memberCount:
+          typeof memberCount === "number" && !isNaN(memberCount) ? memberCount : undefined,
         timestamp: Date.now(),
       };
     }

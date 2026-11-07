@@ -21,7 +21,7 @@ describe("Cloud Sync and Attachment Resolution", () => {
         show_invite_to_members: true,
         meal_categories: ["ভাত", "সবজি", "মাছ মাংস"],
         household_categories: ["বিদ্যুৎ", "ওয়াইফাই"],
-      },
+      } as unknown as MessRecord["mess"],
       members: [
         {
           id: "mem_unicode_1",
@@ -51,7 +51,7 @@ describe("Cloud Sync and Attachment Resolution", () => {
     expect(record).not.toBeNull();
     expect(record?.mess.name).toBe("vertex");
     expect(record?.mess.manager).toBe("md ismail");
-    expect(record?.mess.invite_code).toBe("306611");
+    expect((record?.mess as unknown as { invite_code?: string })?.invite_code).toBe("306611");
     expect(record?.members.length).toBeGreaterThan(0);
   });
 });

@@ -100,5 +100,20 @@ describe("Server storage and 6-digit code member joining", () => {
     });
 
     expect(workspace?.notifications.some((n) => n.id === notif.id)).toBe(true);
+
+    // Admin deletes member Shakib
+    serverSaveRecord({
+      messId: created.id,
+      table: "mess_members",
+      action: "delete",
+      col: "id",
+      val: "mem_shakib_99",
+    });
+
+    const workspaceAfterDelete = await serverGetWorkspace({
+      messId: created.id,
+      month,
+    });
+    expect(workspaceAfterDelete?.members.some((m) => m.id === "mem_shakib_99")).toBe(false);
   });
 });

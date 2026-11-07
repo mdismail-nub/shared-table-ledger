@@ -29,7 +29,16 @@ import {
   findMessByInviteCode,
   type MessRecord,
 } from "@/lib/mess-store";
-import { getMemberSession, setMemberSession, type Member, type Mess } from "@/lib/data";
+import {
+  getMemberSession,
+  setMemberSession,
+  type Member,
+  type Mess,
+  type Meal,
+  type Expense,
+  type Payment,
+  type NotificationItem,
+} from "@/lib/data";
 import logo from "@/assets/logo.png.asset.json";
 
 export const Route = createFileRoute("/join")({
@@ -59,6 +68,20 @@ function JoinMessPage() {
   });
   const [manualInput, setManualInput] = useState("");
 
+  // Reactive members list from server / cloud / storage
+  const [membersList, setMembersList] = useState<Member[]>(() => {
+    if (typeof window !== "undefined") {
+      const parsed = parseInviteFromUrl(window.location.search);
+      if (parsed?.id) {
+        const stored = getStoredMess(parsed.id);
+        if (stored?.members && stored.members.length > 0) {
+          return stored.members;
+        }
+      }
+    }
+    return [];
+  });
+
   // Join form state
   const [selectedMemberId, setSelectedMemberId] = useState<string>("new");
   const [memberName, setMemberName] = useState("");
@@ -67,6 +90,19 @@ function JoinMessPage() {
 
   // Admin state if admin visits their own link
   const adminSession = useMemo(() => getAdminSession(), []);
+
+  // Compute active members
+  const activeMembers = useMemo(() => {
+    return membersList.filter((m) => m.status !== "left");
+  }, [membersList]);
+
+  const displayCount = useMemo(() => {
+    if (activeMembers.length > 0) return activeMembers.length;
+    if (typeof inviteData?.memberCount === "number" && inviteData.memberCount > 0) {
+      return inviteData.memberCount;
+    }
+    return 0;
+  }, [activeMembers.length, inviteData?.memberCount]);
 
   // Parse URL on mount
   useEffect(() => {
@@ -78,7 +114,9 @@ function JoinMessPage() {
 
       // Check if we already have full record in storage
       const existing = getStoredMess(parsed.id);
-      if (!existing) {
+      if (existing?.members && existing.members.length > 0) {
+        setMembersList(existing.members);
+      } else {
         // Initialize basic mess record in storage so member can load it
         const newMess: Mess & { invite_code: string } = {
           id: parsed.id,
@@ -142,21 +180,18 @@ function JoinMessPage() {
         };
 
         saveStoredMess(parsed.id, newRecord);
+        setMembersList([adminMember]);
       }
 
       // Try server function first to get latest members
       import("@/lib/mess.functions")
         .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: parsed.code } }))
         .then((sRes) => {
-          if (sRes && sRes.members) {
+          if (sRes?.members && sRes.members.length > 0) {
+            setMembersList(sRes.members as Member[]);
             const current = getStoredMess(parsed.id);
             if (current) {
-              // merge server members if any
-              for (const sm of sRes.members) {
-                if (!current.members.some((m) => m.id === sm.id)) {
-                  current.members.push(sm as Member);
-                }
-              }
+              current.members = sRes.members as Member[];
               saveStoredMess(parsed.id, current);
             }
           }
@@ -167,7 +202,8 @@ function JoinMessPage() {
       import("@/lib/cloud-sync")
         .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(parsed.code))
         .then((cloud) => {
-          if (cloud) {
+          if (cloud?.members && cloud.members.length > 0) {
+            setMembersList(cloud.members);
             saveStoredMess(cloud.mess.id, cloud);
           }
         })
@@ -199,8 +235,12 @@ function JoinMessPage() {
             manager: sRes.manager,
             code: clean,
             currency: sRes.currency,
+            memberCount: sRes.members?.filter((m) => m.status !== "left").length,
             timestamp: Date.now(),
           });
+          if (sRes.members && sRes.members.length > 0) {
+            setMembersList(sRes.members as Member[]);
+          }
           toast.success(`Mess found: ${sRes.name}`);
           return;
         }
@@ -216,8 +256,12 @@ function JoinMessPage() {
             manager: local.mess.manager,
             code: clean,
             currency: local.mess.currency,
+            memberCount: local.members?.filter((m) => m.status !== "left").length,
             timestamp: Date.now(),
           });
+          if (local.members && local.members.length > 0) {
+            setMembersList(local.members);
+          }
           toast.success(`Mess found: ${local.mess.name}`);
         } else {
           // 3. Try cloud lookup
@@ -232,8 +276,12 @@ function JoinMessPage() {
                   manager: cloud.mess.manager,
                   code: clean,
                   currency: cloud.mess.currency,
+                  memberCount: cloud.members?.filter((m) => m.status !== "left").length,
                   timestamp: Date.now(),
                 });
+                if (cloud.members && cloud.members.length > 0) {
+                  setMembersList(cloud.members);
+                }
                 toast.success(`Mess found: ${cloud.mess.name}`);
               } else {
                 toast.error(
@@ -249,17 +297,6 @@ function JoinMessPage() {
         }
       });
   };
-
-  // Get current members for dropdown/selection
-  const existingRecord = useMemo(() => {
-    if (!inviteData?.id) return null;
-    return getStoredMess(inviteData.id);
-  }, [inviteData?.id]);
-
-  const existingMembers = useMemo(() => {
-    if (!existingRecord) return [];
-    return existingRecord.members.filter((m) => m.status !== "left");
-  }, [existingRecord]);
 
   // Full invite link for sharing
   const shareableUrl = useMemo(() => {
@@ -315,9 +352,43 @@ function JoinMessPage() {
     setBusy(true);
 
     try {
+      // 1. Fetch latest record from server or cloud if not yet loaded locally
       let currentRecord = getStoredMess(inviteData.id);
+      if (!currentRecord || currentRecord.members.length === 0) {
+        try {
+          const { loadWorkspaceByCodeFn } = await import("@/lib/mess.functions");
+          const sRes = await loadWorkspaceByCodeFn({
+            data: { code: inviteData.code, month: new Date().toISOString().slice(0, 7) },
+          });
+          if (sRes?.mess) {
+            currentRecord = {
+              mess: sRes.mess,
+              members: (sRes.members ?? []) as Member[],
+              meals: (sRes.meals ?? []) as Meal[],
+              expenses: (sRes.expenses ?? []) as Expense[],
+              payments: (sRes.payments ?? []) as Payment[],
+              notifications: (sRes.notifications ?? []) as NotificationItem[],
+            };
+          }
+        } catch {
+          // ignore
+        }
+
+        if (!currentRecord || currentRecord.members.length === 0) {
+          try {
+            const { fetchMessFromCloudByCode } = await import("@/lib/cloud-sync");
+            const cloud = await fetchMessFromCloudByCode(inviteData.code);
+            if (cloud?.mess) {
+              currentRecord = cloud;
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+
       if (!currentRecord) {
-        // Create baseline record if missing
+        // Fallback baseline only if completely unreachable
         const newMess: Mess & { invite_code: string } = {
           id: inviteData.id,
           owner_id: `usr_${inviteData.manager.toLowerCase().replace(/\s+/g, "")}`,
@@ -346,7 +417,6 @@ function JoinMessPage() {
             "Other household",
           ],
         };
-
         currentRecord = {
           mess: newMess,
           members: [],
@@ -409,9 +479,24 @@ function JoinMessPage() {
 
         memberIdToUse = newMemId;
         memberNameToUse = cleanName;
+
+        // Save member directly to server
+        try {
+          const { saveRecordFn } = await import("@/lib/mess.functions");
+          await saveRecordFn({
+            data: {
+              messId: inviteData.id,
+              table: "mess_members",
+              action: "insert",
+              payload: newMem,
+            },
+          });
+        } catch {
+          // ignore
+        }
       }
 
-      // Save updated record
+      // Save updated record locally
       saveStoredMess(inviteData.id, currentRecord);
 
       // Set member session
@@ -546,8 +631,7 @@ function JoinMessPage() {
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-primary" />
                 <span>
-                  Members:{" "}
-                  <strong className="text-foreground">{existingMembers.length} active</strong>
+                  Members: <strong className="text-foreground">{displayCount} active</strong>
                 </span>
               </div>
             </div>
@@ -655,7 +739,7 @@ function JoinMessPage() {
                   </span>
                 </div>
 
-                {existingMembers.length > 1 && (
+                {activeMembers.filter((m) => m.role !== "admin").length > 0 && (
                   <div className="space-y-2">
                     <Label className="text-sm font-semibold">
                       Are you already listed as a member?
@@ -673,7 +757,7 @@ function JoinMessPage() {
                         <Plus className="h-3.5 w-3.5" />
                         <span>I'm a new member</span>
                       </button>
-                      {existingMembers
+                      {activeMembers
                         .filter((m) => m.role !== "admin")
                         .map((m) => (
                           <button

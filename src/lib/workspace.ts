@@ -33,6 +33,8 @@ export interface WorkspacePayload {
 export const workspaceOptions = (month = currentMonth()) =>
   queryOptions<WorkspacePayload>({
     queryKey: ["workspace", month],
+    refetchInterval: 3000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<WorkspacePayload> => {
       const memberSession = getMemberSession();
       if (memberSession?.code) {
@@ -41,6 +43,16 @@ export const workspaceOptions = (month = currentMonth()) =>
             data: { code: memberSession.code, month },
           });
           if (sRes) {
+            const fullRecord = {
+              mess: sRes.mess,
+              members: (sRes.members ?? []) as Member[],
+              meals: (sRes.meals ?? []) as Meal[],
+              expenses: (sRes.expenses ?? []) as Expense[],
+              payments: (sRes.payments ?? []) as Payment[],
+              notifications: (sRes.notifications ?? []) as NotificationItem[],
+            };
+            saveStoredMess(sRes.mess.id, fullRecord);
+
             return {
               mess: sRes.mess,
               members: (sRes.members ?? []) as Member[],
@@ -176,6 +188,16 @@ export const workspaceOptions = (month = currentMonth()) =>
             data: { messId: adminSession.messId, month },
           });
           if (sRes) {
+            const fullRecord = {
+              mess: sRes.mess,
+              members: (sRes.members ?? []) as Member[],
+              meals: (sRes.meals ?? []) as Meal[],
+              expenses: (sRes.expenses ?? []) as Expense[],
+              payments: (sRes.payments ?? []) as Payment[],
+              notifications: (sRes.notifications ?? []) as NotificationItem[],
+            };
+            saveStoredMess(adminSession.messId, fullRecord);
+
             return {
               mess: sRes.mess,
               members: (sRes.members ?? []) as Member[],

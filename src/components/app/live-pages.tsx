@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { useSave, db, monthLabel, today, useInviteCode } from "@/lib/data";
 import { Button } from "@/components/ui/button";
@@ -385,17 +386,35 @@ export function DashboardPage() {
 export function MembersPage() {
   const w = useWorkspace();
   const [q, setQ] = useState("");
+  const qc = useQueryClient();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const save = useSave(
     async (v: { id: string; status: string }) =>
       await db.from("mess_members").update({ status: v.status }).eq("id", v.id),
     "Member updated",
   );
 
+  const removeMember = async (id: string, name: string) => {
+    try {
+      setDeletingId(id);
+      await db.from("mess_members").delete().eq("id", id);
+      await qc.invalidateQueries({ queryKey: ["workspace"] });
+      toast.success(`${name} has been removed from this mess.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove member.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const activeCount = w.members.filter((m) => m.status !== "left").length;
+
   return (
     <>
       <PageIntro
         title="Housemates"
-        subtitle={`${w.members.length} members · ${w.mess?.name}`}
+        subtitle={`${activeCount} active housemates · ${w.mess?.name}`}
         actions={w.isAdmin ? <LiveDialog kind="member" /> : null}
       />
       {w.isAdmin && (
@@ -422,6 +441,7 @@ export function MembersPage() {
                     manager: w.mess?.manager || "",
                     code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
+                    memberCount: activeCount,
                   });
                   await navigator.clipboard.writeText(url);
                   toast.success("Invitation link copied!");
@@ -441,6 +461,7 @@ export function MembersPage() {
                     manager: w.mess?.manager || "",
                     code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
+                    memberCount: activeCount,
                   });
                   const msg = encodeURIComponent(
                     `Join our mess "${w.mess?.name}" on Mess Manager:\n${url}`,
@@ -483,17 +504,51 @@ export function MembersPage() {
               </div>
               <p className="mt-4 text-xs text-muted-foreground">Joined {m.joined}</p>
               {w.isAdmin && m.role !== "admin" && (
-                <select
-                  aria-label={`Status for ${m.name}`}
-                  value={m.status}
-                  disabled={save.isPending}
-                  onChange={(e) => save.mutate({ id: m.id, status: e.target.value })}
-                  className="mt-4 h-10 w-full rounded-xl border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="active">Active</option>
-                  <option value="new">New</option>
-                  <option value="left">Left (Exclude from bills)</option>
-                </select>
+                <div className="mt-4 flex items-center gap-2">
+                  <select
+                    aria-label={`Status for ${m.name}`}
+                    value={m.status}
+                    disabled={save.isPending || deletingId === m.id}
+                    onChange={(e) => save.mutate({ id: m.id, status: e.target.value })}
+                    className="h-10 flex-1 rounded-xl border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="active">Active</option>
+                    <option value="new">New</option>
+                    <option value="left">Left (Exclude from bills)</option>
+                  </select>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={deletingId === m.id}
+                        aria-label={`Delete ${m.name}`}
+                        className="h-10 w-10 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Housemate</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to remove <strong>{m.name}</strong> from{" "}
+                          {w.mess?.name}? Their recorded meals and payments will also be removed.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => removeMember(m.id, m.name)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete Member
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               )}
             </article>
           ))}

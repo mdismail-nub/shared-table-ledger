@@ -564,10 +564,20 @@ export function serverSaveRecord(params: {
 
   if (params.table === "mess_members") {
     if (params.action === "insert") {
-      record.members.push(params.payload as Member);
+      const payload = params.payload as Member;
+      const idx = record.members.findIndex((m) => m.id === payload.id);
+      if (idx >= 0) {
+        record.members[idx] = payload;
+      } else {
+        record.members.push(payload);
+      }
     } else if (params.action === "update" && params.col === "id") {
       const target = record.members.find((m) => m.id === params.val);
       if (target) Object.assign(target, params.payload as Partial<Member>);
+    } else if (params.action === "delete" && params.col === "id") {
+      record.members = record.members.filter((m) => m.id !== params.val);
+      record.meals = record.meals.filter((m) => m.member_id !== params.val);
+      record.payments = record.payments.filter((p) => p.member_id !== params.val);
     }
   } else if (params.table === "mess_expenses") {
     if (params.action === "insert") {
@@ -615,17 +625,60 @@ export async function serverSyncMessRecord(record: MessRecord) {
   const db = readDatabase();
   const messId = record.mess.id;
   const invite = (record.mess as unknown as { invite_code?: string })?.invite_code;
-  db.messes[messId] = record;
+
+  if (db.messes[messId]) {
+    const existing = db.messes[messId];
+    // Merge members: add or update from record without deleting existing members on server
+    for (const mem of record.members) {
+      const idx = existing.members.findIndex((m) => m.id === mem.id);
+      if (idx >= 0) {
+        existing.members[idx] = mem;
+      } else {
+        existing.members.push(mem);
+      }
+    }
+    // Merge meals
+    for (const ml of record.meals) {
+      const idx = existing.meals.findIndex(
+        (m) => m.id === ml.id || (m.member_id === ml.member_id && m.date === ml.date),
+      );
+      if (idx >= 0) existing.meals[idx] = ml;
+      else existing.meals.push(ml);
+    }
+    // Merge expenses
+    for (const exp of record.expenses) {
+      if (!existing.expenses.some((e) => e.id === exp.id)) {
+        existing.expenses.push(exp);
+      }
+    }
+    // Merge payments
+    for (const pay of record.payments) {
+      if (!existing.payments.some((p) => p.id === pay.id)) {
+        existing.payments.push(pay);
+      }
+    }
+    // Merge notifications
+    for (const ntf of record.notifications) {
+      if (!existing.notifications.some((n) => n.id === ntf.id)) {
+        existing.notifications.unshift(ntf);
+      }
+    }
+    existing.mess = { ...existing.mess, ...record.mess };
+    db.messes[messId] = existing;
+  } else {
+    db.messes[messId] = record;
+  }
+
   if (invite) {
     db.inviteIndex[invite] = messId;
   }
   writeDatabase(db);
 
   try {
-    await publishMessToCloud(record);
+    await publishMessToCloud(db.messes[messId] || record);
   } catch {
     // ignore
   }
 
-  return { ok: true };
+  return { ok: true, record: db.messes[messId] || record };
 }

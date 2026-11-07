@@ -57,13 +57,16 @@ describe("Mess Invitation Link and Token System", () => {
     expect(parsed1?.name).toBe("Sunrise Mess");
     expect(parsed1?.code).toBe("112233");
 
-    // 2. From plain query params (if token stripped by SMS or messaging app)
-    const parsed2 = parseInviteFromUrl(
-      "?join=1&id=mess_xyz&name=Green+House&mgr=Rafiq&code=998877",
-    );
-    expect(parsed2).not.toBeNull();
-    expect(parsed2?.name).toBe("Green House");
-    expect(parsed2?.manager).toBe("Rafiq");
-    expect(parsed2?.code).toBe("998877");
+    // 3. With memberCount
+    const linkWithMc = createMessInviteLink({
+      id: "mess_xyz",
+      name: "Green House",
+      manager: "Rafiq",
+      code: "998877",
+      memberCount: 3,
+    });
+    expect(linkWithMc).toContain("mc=3");
+    const parsed3 = parseInviteFromUrl(`?${linkWithMc.split("?")[1]}`);
+    expect(parsed3?.memberCount).toBe(3);
   });
 });

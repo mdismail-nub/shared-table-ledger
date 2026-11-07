@@ -726,6 +726,17 @@ export function updateMemberStatusInStore(
   }
 }
 
+export function deleteMemberFromStore(messId: string, memberId: string) {
+  const record = getStoredMess(messId);
+  if (!record) return;
+  const target = record.members.find((m) => m.id === memberId);
+  if (target?.role === "admin") throw new Error("Cannot delete mess administrator.");
+  record.members = record.members.filter((m) => m.id !== memberId);
+  record.meals = record.meals.filter((m) => m.member_id !== memberId);
+  record.payments = record.payments.filter((p) => p.member_id !== memberId);
+  saveStoredMess(messId, record);
+}
+
 export function upsertMealInStore(messId: string, meal: Partial<Meal>): Meal {
   const record = getStoredMess(messId);
   if (!record) throw new Error("Mess not found");

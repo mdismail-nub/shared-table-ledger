@@ -11,6 +11,7 @@ import {
   getMessDataByCode,
   addMemberToStore,
   updateMemberStatusInStore,
+  deleteMemberFromStore,
   addExpenseToStore,
   deleteExpenseFromStore,
   addPaymentToStore,
@@ -628,16 +629,76 @@ const storeDb = {
       eq: async (col: string, val: AnyData) => {
         const admin = getAdminSession();
         if (admin && col === "id") {
+          if (table === "mess_members") {
+            deleteMemberFromStore(admin.messId, val);
+            try {
+              const { saveRecordFn } = await import("./mess.functions");
+              await saveRecordFn({
+                data: {
+                  messId: admin.messId,
+                  table: "mess_members",
+                  action: "delete",
+                  col: "id",
+                  val,
+                },
+              });
+            } catch {
+              // ignore
+            }
+            return { data: null, error: null };
+          }
           if (table === "mess_expenses") {
             deleteExpenseFromStore(admin.messId, val);
+            try {
+              const { saveRecordFn } = await import("./mess.functions");
+              await saveRecordFn({
+                data: {
+                  messId: admin.messId,
+                  table: "mess_expenses",
+                  action: "delete",
+                  col: "id",
+                  val,
+                },
+              });
+            } catch {
+              // ignore
+            }
             return { data: null, error: null };
           }
           if (table === "payments") {
             deletePaymentFromStore(admin.messId, val);
+            try {
+              const { saveRecordFn } = await import("./mess.functions");
+              await saveRecordFn({
+                data: {
+                  messId: admin.messId,
+                  table: "payments",
+                  action: "delete",
+                  col: "id",
+                  val,
+                },
+              });
+            } catch {
+              // ignore
+            }
             return { data: null, error: null };
           }
           if (table === "mess_notifications") {
             deleteNotificationFromStore(admin.messId, val);
+            try {
+              const { saveRecordFn } = await import("./mess.functions");
+              await saveRecordFn({
+                data: {
+                  messId: admin.messId,
+                  table: "mess_notifications",
+                  action: "delete",
+                  col: "id",
+                  val,
+                },
+              });
+            } catch {
+              // ignore
+            }
             return { data: null, error: null };
           }
         }
