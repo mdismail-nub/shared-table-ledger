@@ -37,10 +37,12 @@ import {
   Download,
   ArrowRight,
   Megaphone,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportLedger } from "@/lib/export";
 import { SendNotificationDialog } from "./notification-dialog";
+import { createMessInviteLink } from "@/lib/invite";
 
 function ConfirmDeleteDialog({
   title,
@@ -258,6 +260,71 @@ export function DashboardPage() {
         </div>
       </section>
 
+      {w.isAdmin && w.members.length <= 1 && (
+        <div className="rounded-3xl border border-primary/30 bg-primary/5 p-6 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                Get Started
+              </span>
+              <h2 className="text-xl font-extrabold text-foreground mt-0.5">
+                Invite your housemates to join!
+              </h2>
+              <p className="text-xs text-muted-foreground mt-1 max-w-lg">
+                Share this direct invitation link so your flatmates can join instantly without
+                creating accounts.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const link = createMessInviteLink({
+                    id: w.mess?.id || "",
+                    name: w.mess?.name || "",
+                    manager: w.mess?.manager || "",
+                    code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
+                    currency: w.mess?.currency,
+                  });
+                  await navigator.clipboard.writeText(link);
+                  toast.success("Invitation link copied!");
+                }}
+                className="gap-1.5"
+              >
+                <Copy className="h-4 w-4" />
+                Copy Invite Link
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const link = createMessInviteLink({
+                    id: w.mess?.id || "",
+                    name: w.mess?.name || "",
+                    manager: w.mess?.manager || "",
+                    code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
+                    currency: w.mess?.currency,
+                  });
+                  const msg = encodeURIComponent(
+                    `Join our mess "${w.mess?.name}" on Mess Manager:\n${link}`,
+                  );
+                  window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
+                }}
+                className="gap-1.5 text-emerald-600 hover:text-emerald-700"
+              >
+                <Share2 className="h-4 w-4" />
+                WhatsApp
+              </Button>
+              <Button size="sm" onClick={() => nav({ to: "/members" })} className="gap-1.5">
+                <Users className="h-4 w-4" />
+                Manage Members
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Meal rate"
@@ -331,6 +398,64 @@ export function MembersPage() {
         subtitle={`${w.members.length} members · ${w.mess?.name}`}
         actions={w.isAdmin ? <LiveDialog kind="member" /> : null}
       />
+      {w.isAdmin && (
+        <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" />
+                Invite Housemates via Direct Link
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Share this link with your housemates. Anyone who opens it can join your mess
+                instantly.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const url = createMessInviteLink({
+                    id: w.mess?.id || "",
+                    name: w.mess?.name || "",
+                    manager: w.mess?.manager || "",
+                    code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
+                    currency: w.mess?.currency,
+                  });
+                  await navigator.clipboard.writeText(url);
+                  toast.success("Invitation link copied!");
+                }}
+                className="gap-1.5"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                Copy Invite Link
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const url = createMessInviteLink({
+                    id: w.mess?.id || "",
+                    name: w.mess?.name || "",
+                    manager: w.mess?.manager || "",
+                    code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
+                    currency: w.mess?.currency,
+                  });
+                  const msg = encodeURIComponent(
+                    `Join our mess "${w.mess?.name}" on Mess Manager:\n${url}`,
+                  );
+                  window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
+                }}
+                className="gap-1.5 text-emerald-600 hover:text-emerald-700"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                WhatsApp
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <Input
         aria-label="Search members"
         placeholder="Search housemates…"
@@ -958,9 +1083,10 @@ export function SettingsPage() {
 
       {invite.data && (
         <section className="border-t pt-6">
-          <h2 className="text-lg font-bold">Invitation code</h2>
+          <h2 className="text-lg font-bold">Invitation link & code</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Share this 6-digit code with housemates so they can join your mess.
+            Share this link with housemates so they can join your mess instantly without needing an
+            account.
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="text-3xl font-extrabold tracking-[0.15em]">{invite.data}</span>
@@ -980,13 +1106,41 @@ export function SettingsPage() {
               variant="outline"
               size="sm"
               onClick={async () => {
-                const link = `${window.location.origin}/?code=${invite.data}`;
+                const link = createMessInviteLink({
+                  id: w.mess?.id || "",
+                  name: w.mess?.name || "",
+                  manager: w.mess?.manager || "",
+                  code: invite.data || "",
+                  currency: w.mess?.currency,
+                });
                 await navigator.clipboard.writeText(link);
                 toast.success("Direct invitation link copied!");
               }}
+              className="gap-1.5"
             >
               <Copy className="h-3.5 w-3.5" />
-              Copy Direct Link
+              Copy Invite Link
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const link = createMessInviteLink({
+                  id: w.mess?.id || "",
+                  name: w.mess?.name || "",
+                  manager: w.mess?.manager || "",
+                  code: invite.data || "",
+                  currency: w.mess?.currency,
+                });
+                const msg = encodeURIComponent(
+                  `Join our mess "${w.mess?.name}" on Mess Manager:\n${link}`,
+                );
+                window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
+              }}
+              className="gap-1.5 text-emerald-600 hover:text-emerald-700"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              WhatsApp
             </Button>
             {w.isAdmin && (
               <AlertDialog>

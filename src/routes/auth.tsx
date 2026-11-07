@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { pageMeta } from "@/lib/meta";
 import { signInAdmin, signUpAdmin, getAdminSession } from "@/lib/mess-store";
+import { createMessInviteLink } from "@/lib/invite";
 import { useQueryClient } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/auth")({
@@ -62,8 +63,20 @@ function AuthPage() {
         currency,
       });
       await qc.invalidateQueries();
-      toast.success(`Admin account created for ${session.name}!`);
-      navigate({ to: "/dashboard", replace: true });
+      toast.success(`Admin account created for ${session.name}! 🎉`);
+      const code = session.inviteCode || "123456";
+      const inviteUrl = createMessInviteLink({
+        id: session.messId,
+        name: messName,
+        manager: name,
+        code,
+        currency,
+      });
+      if (typeof window !== "undefined") {
+        window.location.href = inviteUrl;
+      } else {
+        navigate({ to: "/join" });
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Registration failed. Please try again.");
       setBusy(false);

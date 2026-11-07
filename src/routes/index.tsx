@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,6 +12,7 @@ import {
   Home,
   CheckCircle2,
   Eye,
+  Share2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import {
   type AdminSession,
 } from "@/lib/mess-store";
 import { lookupMessByCodeFn, createMessFn } from "@/lib/mess.functions";
+import { createMessInviteLink } from "@/lib/invite";
 import welcome from "@/assets/onboard-welcome.png";
 import admin from "@/assets/role-admin.png";
 import member from "@/assets/role-member.png";
@@ -57,6 +59,12 @@ function Welcome() {
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState("");
   const [created, setCreated] = useState("");
+  const [createdMess, setCreatedMess] = useState<{
+    id: string;
+    name: string;
+    manager: string;
+    code: string;
+  } | null>(null);
 
   const [messInfo, setMessInfo] = useState<MessLookupResult | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
@@ -371,6 +379,12 @@ function Welcome() {
         });
 
         setCreated(res.invite_code);
+        setCreatedMess({
+          id: res.id,
+          name,
+          manager,
+          code: res.invite_code,
+        });
         setStep("done");
       } else {
         const cleanCode = code.replace(/\D/g, "").slice(0, 6);
@@ -725,38 +739,111 @@ function Welcome() {
         )}
 
         {step === "done" && (
-          <>
-            <div className="grid h-20 w-20 place-items-center rounded-full bg-mint text-mint-foreground">
+          <div className="w-full max-w-lg space-y-6 text-center">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-mint text-mint-foreground">
               <Check className="h-9 w-9" />
             </div>
-            <h1 className="mt-6 text-3xl font-extrabold">Your table is ready!</h1>
-            <p className="mt-3 text-muted-foreground">
-              Share this 6-digit code with your housemates. They won't need to sign in with
-              Google—they simply enter this code to view meals, expenses, and notices.
-            </p>
-            <p className="mt-6 text-4xl font-extrabold tracking-[0.2em]">{created}</p>
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={async () => {
-                await navigator.clipboard.writeText(created);
-                toast.success("Invite code copied");
-              }}
-            >
-              <Copy />
-              Copy invite code
-            </Button>
-            <Button
-              className="mt-7"
-              size="lg"
-              onClick={async () => {
-                await qc.invalidateQueries();
-                navigate({ to: "/dashboard" });
-              }}
-            >
-              Go to my dashboard <ArrowRight />
-            </Button>
-          </>
+            <div>
+              <h1 className="text-3xl font-extrabold">Your mess is ready! 🎉</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Share this direct invitation link with your housemates. When they click it, they
+                will join your mess instantly without needing any passwords or email sign-in.
+              </p>
+            </div>
+
+            {/* Direct Invitation Link Card */}
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                  Direct Invitation Link
+                </span>
+                <span className="text-[11px] font-mono text-muted-foreground">Code: {created}</span>
+              </div>
+
+              {createdMess && (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    readOnly
+                    value={createMessInviteLink({
+                      id: createdMess.id,
+                      name: createdMess.name,
+                      manager: createdMess.manager,
+                      code: createdMess.code,
+                    })}
+                    className="bg-background font-mono text-xs"
+                  />
+                  <Button
+                    onClick={async () => {
+                      const link = createMessInviteLink({
+                        id: createdMess.id,
+                        name: createdMess.name,
+                        manager: createdMess.manager,
+                        code: createdMess.code,
+                      });
+                      await navigator.clipboard.writeText(link);
+                      toast.success("Invitation link copied!");
+                    }}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy Link
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const link = createMessInviteLink({
+                        id: createdMess.id,
+                        name: createdMess.name,
+                        manager: createdMess.manager,
+                        code: createdMess.code,
+                      });
+                      const msg = encodeURIComponent(
+                        `Join our mess "${createdMess.name}" on Mess Manager:\n${link}`,
+                      );
+                      window.open(`https://api.whatsapp.com/send?text=${msg}`, "_blank");
+                    }}
+                    className="shrink-0 gap-1.5 text-emerald-600 hover:text-emerald-700"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    WhatsApp
+                  </Button>
+                </div>
+              )}
+
+              <p className="text-[11px] text-muted-foreground">
+                💡 Housemates can also join by visiting with the 6-digit backup code:{" "}
+                <strong className="font-mono text-foreground">{created}</strong>
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              {createdMess && (
+                <a
+                  href={createMessInviteLink({
+                    id: createdMess.id,
+                    name: createdMess.name,
+                    manager: createdMess.manager,
+                    code: createdMess.code,
+                  })}
+                >
+                  <Button variant="outline" className="w-full gap-2">
+                    <Users className="h-4 w-4" />
+                    Add Housemates Now
+                  </Button>
+                </a>
+              )}
+              <Button
+                size="lg"
+                onClick={async () => {
+                  await qc.invalidateQueries();
+                  navigate({ to: "/dashboard" });
+                }}
+                className="gap-2"
+              >
+                Go to my dashboard <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         )}
       </main>
 

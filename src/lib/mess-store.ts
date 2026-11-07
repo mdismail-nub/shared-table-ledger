@@ -17,6 +17,7 @@ export type AdminSession = {
   name: string;
   messId: string;
   token: string;
+  inviteCode?: string | undefined;
   createdAt: string;
 };
 
@@ -511,6 +512,7 @@ export async function signUpAdmin(params: {
     name: params.name.trim(),
     messId,
     token: `adm_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    inviteCode,
     createdAt: new Date().toISOString(),
   };
 
@@ -555,12 +557,14 @@ export async function signInAdmin(params: {
       .catch(() => {});
   }
 
+  const inviteCode = (existingRecord?.mess as unknown as { invite_code?: string })?.invite_code;
   const session: AdminSession = {
     userId: account.id,
     email: account.email,
     name: account.name,
     messId: account.messId,
     token: `adm_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    inviteCode,
     createdAt: new Date().toISOString(),
   };
 
