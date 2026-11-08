@@ -107,6 +107,14 @@ export function getAdminSession(): AdminSession | null {
 
 export function setAdminSession(session: AdminSession) {
   safeSet(ADMIN_SESSION_KEY, JSON.stringify(session));
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem("mess_member_session");
+      sessionStorage.removeItem("mess_member_session");
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function clearAdminSession() {
@@ -682,10 +690,21 @@ export function getMessDataById(messId: string, month: string) {
   };
 }
 
-export function getMessDataByCode(code: string, month: string) {
+export function getMessDataByCode(code: string, month: string, memberId?: string) {
   const found = findMessByInviteCode(code);
   if (!found) return null;
-  return getMessDataById(found.mess.id, month);
+  const data = getMessDataById(found.mess.id, month);
+  if (!data) return null;
+  const filteredNotifs = (data.notifications || []).filter((n) => {
+    if (!n.recipient_id || n.recipient_id === "" || n.recipient_id === "all") return true;
+    if (memberId && n.recipient_id === memberId) return true;
+    if (memberId && n.sender_id === memberId) return true;
+    return false;
+  });
+  return {
+    ...data,
+    notifications: filteredNotifs,
+  };
 }
 
 // ----------------- STORE MUTATION METHODS -----------------
@@ -827,8 +846,24 @@ export function addNotificationToStore(
   messId: string,
   notif: Partial<NotificationItem>,
 ): NotificationItem {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  let record = getStoredMess(messId);
+  if (!record) {
+    const rawIndex = safeGet(MESS_INDEX_KEY);
+    let index: string[] = [];
+    try {
+      index = rawIndex ? JSON.parse(rawIndex) : [];
+    } catch {
+      index = [];
+    }
+    for (const id of index) {
+      const r = getStoredMess(id);
+      const inv = (r?.mess as unknown as { invite_code?: string })?.invite_code;
+      if (inv === messId || id === messId) {
+        record = r;
+        break;
+      }
+    }
+  }
 
   const newNotif: NotificationItem = {
     id: notif.id || `ntf_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -841,8 +876,13 @@ export function addNotificationToStore(
     created_at: notif.created_at || new Date().toISOString(),
   };
 
-  record.notifications.unshift(newNotif);
-  saveStoredMess(messId, record);
+  if (record) {
+    if (!record.notifications.some((n) => n.id === newNotif.id)) {
+      record.notifications.unshift(newNotif);
+      saveStoredMess(record.mess.id, record);
+    }
+  }
+
   return newNotif;
 }
 

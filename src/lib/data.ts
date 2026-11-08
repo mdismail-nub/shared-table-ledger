@@ -19,6 +19,7 @@ import {
   upsertMealInStore,
   addNotificationToStore,
   deleteNotificationFromStore,
+  getStoredMess,
   updateMessSettingsInStore,
   regenerateInviteCodeInStore,
 } from "./mess-store";
@@ -126,6 +127,12 @@ export function getMemberSession(): MemberSession | null {
 export function setMemberSession(session: MemberSession) {
   if (typeof window === "undefined") return;
   localStorage.setItem(MEMBER_SESSION_KEY, JSON.stringify(session));
+  try {
+    localStorage.removeItem("mess_admin_session");
+    sessionStorage.removeItem("mess_admin_session");
+  } catch {
+    // ignore
+  }
 }
 
 export function clearMemberSession() {
@@ -578,6 +585,84 @@ const storeDb = {
     },
 
     insert: async (payload: AnyData) => {
+      // 1. Unified notification handler for both admin and member
+      if (table === "mess_notifications") {
+        const notifPayload = payload as Partial<NotificationItem>;
+        const admin = getAdminSession();
+        const member = getMemberSession();
+        const messId = notifPayload.mess_id || admin?.messId || member?.messId;
+
+        if (messId) {
+          const item: NotificationItem = {
+            id: notifPayload.id || `ntf_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            mess_id: messId,
+            sender_id: notifPayload.sender_id ?? (admin ? admin.userId : member?.memberId) ?? null,
+            recipient_id: notifPayload.recipient_id ?? null,
+            title: notifPayload.title || "Notice",
+            message: notifPayload.message || "",
+            type: notifPayload.type || "notice",
+            created_at: notifPayload.created_at || new Date().toISOString(),
+          };
+
+          // 1. Save to local storage
+          try {
+            addNotificationToStore(messId, item);
+          } catch {
+            // ignore
+          }
+
+          // 2. Direct server save (online primary path)
+          let serverOk = false;
+          try {
+            const { saveRecordFn } = await import("./mess.functions");
+            const sRes = await saveRecordFn({
+              data: {
+                messId,
+                table: "mess_notifications",
+                action: "insert",
+                payload: item,
+              },
+            });
+            if (sRes && !(sRes as { error?: string }).error) {
+              serverOk = true;
+            }
+          } catch {
+            // will enqueue if offline
+          }
+
+          // 3. Publish to cloud if reachable
+          try {
+            const rec = getStoredMess(messId);
+            if (rec) {
+              const { publishMessToCloud } = await import("./cloud-sync");
+              await publishMessToCloud(rec);
+            }
+          } catch {
+            // ignore
+          }
+
+          // 4. Offline sync queue ONLY if server was unreachable
+          if (!serverOk) {
+            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await enqueueSyncOperation({
+              uuid,
+              messId,
+              table: "mess_notifications",
+              action: "insert",
+              payload: item,
+            });
+
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              executePendingSync(messId).catch(() => {});
+            } else {
+              registerBackgroundSync();
+            }
+          }
+
+          return { data: item, error: null };
+        }
+      }
+
       const admin = getAdminSession();
       if (admin) {
         let added: AnyData = null;
@@ -587,29 +672,49 @@ const storeDb = {
           added = addExpenseToStore(admin.messId, payload);
         } else if (table === "payments") {
           added = addPaymentToStore(admin.messId, payload);
-        } else if (table === "mess_notifications") {
-          added = addNotificationToStore(admin.messId, payload);
         }
 
         if (added) {
-          const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-          await enqueueSyncOperation({
-            uuid,
-            messId: admin.messId,
-            table,
-            action: "insert",
-            payload: added,
-          });
+          // Direct server save
+          let serverOk = false;
+          try {
+            const { saveRecordFn } = await import("./mess.functions");
+            const sRes = await saveRecordFn({
+              data: {
+                messId: admin.messId,
+                table,
+                action: "insert",
+                payload: added,
+              },
+            });
+            if (sRes && !(sRes as { error?: string }).error) {
+              serverOk = true;
+            }
+          } catch {
+            // will enqueue if offline
+          }
 
-          if (typeof navigator !== "undefined" && navigator.onLine) {
-            executePendingSync(admin.messId).catch(() => {});
-          } else {
-            registerBackgroundSync();
+          if (!serverOk) {
+            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await enqueueSyncOperation({
+              uuid,
+              messId: admin.messId,
+              table,
+              action: "insert",
+              payload: added,
+            });
+
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              executePendingSync(admin.messId).catch(() => {});
+            } else {
+              registerBackgroundSync();
+            }
           }
 
           return { data: added, error: null };
         }
       }
+
       return (supabase.from(table as AnyData) as AnyData).insert(payload);
     },
 
@@ -685,6 +790,55 @@ const storeDb = {
 
     delete: () => ({
       eq: async (col: string, val: AnyData) => {
+        // Dedicated notification deletion
+        if (col === "id" && table === "mess_notifications") {
+          const admin = getAdminSession();
+          const member = getMemberSession();
+          const messId = admin?.messId || member?.messId;
+
+          if (messId) {
+            deleteNotificationFromStore(messId, val);
+
+            let serverOk = false;
+            try {
+              const { saveRecordFn } = await import("./mess.functions");
+              const sRes = await saveRecordFn({
+                data: {
+                  messId,
+                  table: "mess_notifications",
+                  action: "delete",
+                  col: "id",
+                  val,
+                },
+              });
+              if (sRes && !(sRes as { error?: string }).error) {
+                serverOk = true;
+              }
+            } catch {
+              // offline
+            }
+
+            if (!serverOk) {
+              const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+              await enqueueSyncOperation({
+                uuid,
+                messId,
+                table: "mess_notifications",
+                action: "delete",
+                col: "id",
+                val,
+              });
+              if (typeof navigator !== "undefined" && navigator.onLine) {
+                executePendingSync(messId).catch(() => {});
+              } else {
+                registerBackgroundSync();
+              }
+            }
+
+            return { data: null, error: null };
+          }
+        }
+
         const admin = getAdminSession();
         if (admin && col === "id") {
           if (table === "mess_members") {
@@ -697,24 +851,46 @@ const storeDb = {
             deleteNotificationFromStore(admin.messId, val);
           }
 
-          const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-          await enqueueSyncOperation({
-            uuid,
-            messId: admin.messId,
-            table,
-            action: "delete",
-            col: "id",
-            val,
-          });
+          let serverOk = false;
+          try {
+            const { saveRecordFn } = await import("./mess.functions");
+            const sRes = await saveRecordFn({
+              data: {
+                messId: admin.messId,
+                table,
+                action: "delete",
+                col: "id",
+                val,
+              },
+            });
+            if (sRes && !(sRes as { error?: string }).error) {
+              serverOk = true;
+            }
+          } catch {
+            // offline
+          }
 
-          if (typeof navigator !== "undefined" && navigator.onLine) {
-            executePendingSync(admin.messId).catch(() => {});
-          } else {
-            registerBackgroundSync();
+          if (!serverOk) {
+            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await enqueueSyncOperation({
+              uuid,
+              messId: admin.messId,
+              table,
+              action: "delete",
+              col: "id",
+              val,
+            });
+
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              executePendingSync(admin.messId).catch(() => {});
+            } else {
+              registerBackgroundSync();
+            }
           }
 
           return { data: null, error: null };
         }
+
         return (supabase.from(table as AnyData) as AnyData).delete().eq(col, val);
       },
     }),

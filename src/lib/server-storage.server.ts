@@ -468,9 +468,10 @@ export async function serverCreateMess(params: {
 }
 
 export async function serverGetWorkspace(params: {
-  code?: string;
-  messId?: string;
+  code?: string | undefined;
+  messId?: string | undefined;
   month: string;
+  memberId?: string | undefined;
 }) {
   const db = readDatabase();
   let messId = params.messId;
@@ -515,13 +516,36 @@ export async function serverGetWorkspace(params: {
     record.members,
   );
 
+  let notifications = record.notifications;
+  // If accessed by a member session (via invite code or with memberId), filter out other members' private notices
+  if (params.code || params.memberId) {
+    const memId = params.memberId;
+    notifications = record.notifications.filter((n) => {
+      // Broadcast notice to everyone
+      if (!n.recipient_id || n.recipient_id === "" || n.recipient_id === "all") return true;
+      // Direct notice for this member
+      if (memId && n.recipient_id === memId) return true;
+      // Sent by this member to admin
+      if (memId && n.sender_id === memId) return true;
+      // Targeted to another member -> private
+      return false;
+    });
+  }
+
+  const seenIds = new Set<string>();
+  const uniqueNotifications = notifications.filter((n) => {
+    if (seenIds.has(n.id)) return false;
+    seenIds.add(n.id);
+    return true;
+  });
+
   return {
     mess: record.mess,
     members: record.members,
     meals,
     expenses,
     payments,
-    notifications: record.notifications,
+    notifications: uniqueNotifications,
     summary,
   };
 }
@@ -535,7 +559,22 @@ export function serverSaveRecord(params: {
   val?: unknown;
 }) {
   const db = readDatabase();
-  const record = db.messes[params.messId];
+  let record = db.messes[params.messId];
+  if (!record) {
+    const cleanId = (params.messId || "").trim();
+    const indexedId = db.inviteIndex[cleanId];
+    if (indexedId && db.messes[indexedId]) {
+      record = db.messes[indexedId];
+    } else {
+      for (const [id, r] of Object.entries(db.messes)) {
+        const invite = (r.mess as unknown as { invite_code?: string })?.invite_code;
+        if (invite === cleanId || id === cleanId) {
+          record = r;
+          break;
+        }
+      }
+    }
+  }
   if (!record) return { error: "Mess not found" };
 
   if (params.table === "mess_members") {
@@ -580,7 +619,18 @@ export function serverSaveRecord(params: {
     }
   } else if (params.table === "mess_notifications") {
     if (params.action === "insert") {
-      record.notifications.unshift(params.payload as NotificationItem);
+      const payload = params.payload as NotificationItem;
+      const exists = record.notifications.some(
+        (n) =>
+          n.id === payload.id ||
+          (n.title === payload.title &&
+            n.message === payload.message &&
+            Math.abs(new Date(n.created_at).getTime() - new Date(payload.created_at).getTime()) <
+              5000),
+      );
+      if (!exists) {
+        record.notifications.unshift(payload);
+      }
     } else if (params.action === "delete" && params.col === "id") {
       record.notifications = record.notifications.filter((n) => n.id !== params.val);
     }

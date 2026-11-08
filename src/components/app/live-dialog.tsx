@@ -106,7 +106,7 @@ export function LiveDialog({ kind }: { kind: "member" | "expense" | "payment" })
           {title}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 rounded-2xl sm:rounded-3xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

@@ -56,10 +56,10 @@ describe("PWA Assets & Manifests", () => {
     expect(fs.existsSync(swPath)).toBe(true);
 
     const content = fs.readFileSync(swPath, "utf-8");
-    expect(content).toContain("addEventListener(\"install\"");
-    expect(content).toContain("addEventListener(\"activate\"");
-    expect(content).toContain("addEventListener(\"fetch\"");
-    expect(content).toContain("addEventListener(\"sync\"");
+    expect(content).toContain('addEventListener("install"');
+    expect(content).toContain('addEventListener("activate"');
+    expect(content).toContain('addEventListener("fetch"');
+    expect(content).toContain('addEventListener("sync"');
     expect(content).toContain("CACHE_STATIC");
     expect(content).toContain("CACHE_FONTS");
     expect(content).toContain("sync-mess-data");

@@ -47,12 +47,16 @@ export function PageIntro({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div>
-        <h2 className="text-2xl font-extrabold sm:text-3xl">{title}</h2>
-        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+    <div className="mb-4 sm:mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between min-w-0">
+      <div className="min-w-0">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight truncate">
+          {title}
+        </h2>
+        <p className="mt-0.5 sm:mt-1 text-xs sm:text-sm text-muted-foreground truncate">
+          {subtitle}
+        </p>
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
     </div>
   );
 }
@@ -73,25 +77,34 @@ export function StatCard({
   hint?: string;
 }) {
   return (
-    <div className={cn("rounded-2xl p-4 transition-transform hover:-translate-y-0.5", tones[tone])}>
+    <div
+      className={cn(
+        "rounded-2xl p-3 sm:p-4 min-w-0 overflow-hidden transition-transform hover:-translate-y-0.5",
+        tones[tone],
+      )}
+    >
       <div className="flex items-center justify-between">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-card/70">
-          <Icon className="h-[18px] w-[18px]" />
+        <span className="grid h-8 w-8 sm:h-9 sm:w-9 place-items-center rounded-xl bg-card/70 shrink-0">
+          <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
         </span>
         {delta !== undefined && (
-          <span className="flex items-center gap-1 text-xs font-semibold">
+          <span className="flex items-center gap-1 text-[11px] sm:text-xs font-semibold">
             {delta >= 0 ? (
-              <TrendingUp className="h-3.5 w-3.5" />
+              <TrendingUp className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             ) : (
-              <TrendingDown className="h-3.5 w-3.5" />
+              <TrendingDown className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             )}
             {Math.abs(delta)}%
           </span>
         )}
       </div>
-      <p className="mt-4 text-xs font-medium text-foreground/70">{label}</p>
-      <p className="mt-0.5 text-2xl font-extrabold tracking-tight text-foreground">{value}</p>
-      {hint && <p className="mt-1 text-xs text-foreground/60">{hint}</p>}
+      <p className="mt-3 sm:mt-4 text-[11px] sm:text-xs font-medium text-foreground/70 truncate">
+        {label}
+      </p>
+      <p className="mt-0.5 text-lg sm:text-2xl font-extrabold tracking-tight text-foreground truncate">
+        {value}
+      </p>
+      {hint && <p className="mt-1 text-[10px] sm:text-xs text-foreground/60 truncate">{hint}</p>}
     </div>
   );
 }
@@ -176,14 +189,23 @@ export function EmptyState({
   );
 }
 
-export function Money({ value, signed }: { value: number; signed?: boolean }) {
+export function Money({
+  value,
+  signed,
+  className,
+}: {
+  value: number;
+  signed?: boolean;
+  className?: string;
+}) {
   const s = `৳${Math.abs(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-  if (!signed) return <>{s}</>;
+  if (!signed) return <span className={className}>{s}</span>;
   return (
     <span
       className={cn(
         "font-semibold",
         value < 0 ? "text-destructive" : value > 0 ? "text-success" : "text-muted-foreground",
+        className,
       )}
     >
       {value < 0 ? "−" : value > 0 ? "+" : ""}

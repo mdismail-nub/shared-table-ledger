@@ -39,10 +39,11 @@ import {
   ArrowRight,
   Megaphone,
   Share2,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
 import { exportLedger } from "@/lib/export";
-import { SendNotificationDialog } from "./notification-dialog";
+import { SendNotificationDialog, MessageAdminDialog } from "./notification-dialog";
 import { createMessInviteLink } from "@/lib/invite";
 import { usePwa } from "@/lib/pwa";
 import { useOnlineStatus, usePendingEntities } from "@/lib/offline-sync";
@@ -151,11 +152,7 @@ export function SpendingChart() {
 
 function NoticeBoard() {
   const w = useWorkspace();
-  const notifications = (w.notifications ?? []).filter((n) => {
-    if (w.isAdmin) return true;
-    if (!n.recipient_id) return true;
-    return n.recipient_id === w.userId;
-  });
+  const notifications = w.notifications ?? [];
 
   const typeConfig: Record<string, { tone: string; label: string }> = {
     notice: { tone: "bg-lime text-lime-foreground", label: "Notice" },
@@ -164,21 +161,23 @@ function NoticeBoard() {
     info: { tone: "bg-cyan text-cyan-foreground", label: "Info" },
   };
 
+  const myId = w.userId || w.own?.id;
+
   return (
-    <section className="rounded-3xl border bg-card p-6 shadow-card">
+    <section className="rounded-2xl sm:rounded-3xl border bg-card p-4 sm:p-6 shadow-card min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
-        <div className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-2xl bg-primary text-primary-foreground">
-            <Megaphone className="h-5 w-5" />
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="grid h-9 w-9 sm:h-10 sm:w-10 place-items-center rounded-2xl bg-primary text-primary-foreground shrink-0">
+            <Megaphone className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-bold">Mess Notice Board</h2>
-            <p className="text-xs text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold truncate">Mess Notice Board</h2>
+            <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
               Broadcast announcements and member updates
             </p>
           </div>
         </div>
-        {w.isAdmin && <SendNotificationDialog />}
+        {w.isAdmin ? <SendNotificationDialog /> : <MessageAdminDialog />}
       </div>
 
       {notifications.length === 0 ? (
@@ -187,28 +186,56 @@ function NoticeBoard() {
           <p className="mt-1 text-xs">
             {w.isAdmin
               ? "Keep your housemates informed. Click 'Send Notice' to broadcast an announcement."
-              : "No notices have been posted yet."}
+              : "No notices have been posted yet. Need to turn off a meal? Click 'Message Admin'."}
           </p>
         </div>
       ) : (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 sm:mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 min-w-0">
           {notifications.slice(0, 6).map((n) => {
             const cfg = typeConfig[n.type] ?? typeConfig["notice"]!;
-            const isPrivate = Boolean(n.recipient_id);
+            const sender = w.members.find((m) => m.id === n.sender_id || m.user_id === n.sender_id);
+            const recipient = w.members.find(
+              (m) => m.id === n.recipient_id || m.user_id === n.recipient_id,
+            );
+
+            const isFromMemberToAdmin = Boolean(
+              w.isAdmin &&
+              n.sender_id &&
+              n.sender_id !== w.own?.id &&
+              (sender?.role !== "admin" ||
+                n.recipient_id === w.own?.id ||
+                n.recipient_id === w.mess?.owner_id),
+            );
+            const isTargetedToMe = Boolean(
+              !w.isAdmin &&
+              n.recipient_id &&
+              (n.recipient_id === myId ||
+                n.recipient_id === w.own?.id ||
+                n.recipient_id === w.own?.user_id),
+            );
+            const isSentByMe = Boolean(
+              !w.isAdmin &&
+              n.sender_id &&
+              (n.sender_id === myId || n.sender_id === w.own?.id || n.sender_id === w.own?.user_id),
+            );
 
             return (
               <article
                 key={n.id}
-                className="relative flex flex-col justify-between rounded-2xl border bg-background/60 p-4 shadow-sm"
+                className={`relative flex flex-col justify-between rounded-2xl border p-3.5 sm:p-4 shadow-sm transition-all min-w-0 overflow-hidden ${
+                  isFromMemberToAdmin
+                    ? "border-primary/40 bg-primary/5 dark:bg-primary/10"
+                    : "border-border bg-background/60"
+                }`}
               >
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${cfg.tone}`}
                     >
                       {cfg.label}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground shrink-0">
                       {new Date(n.created_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
@@ -216,14 +243,36 @@ function NoticeBoard() {
                     </span>
                   </div>
 
-                  <h3 className="mt-2 text-sm font-bold text-foreground">{n.title}</h3>
-                  <p className="mt-1.5 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                  <h3 className="mt-2 text-xs sm:text-sm font-bold text-foreground break-words [overflow-wrap:anywhere]">
+                    {n.title}
+                  </h3>
+                  <p className="mt-1.5 text-[11px] sm:text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                     {n.message}
                   </p>
                 </div>
 
-                <div className="mt-3 border-t pt-2 text-[10px] text-muted-foreground">
-                  {isPrivate ? "👤 For you specifically" : "📢 Sent to all housemates"}
+                <div className="mt-3 border-t pt-2 text-[10px]">
+                  {w.isAdmin ? (
+                    isFromMemberToAdmin ? (
+                      <span className="font-semibold text-primary">
+                        💬 From: {sender?.name || "Housemate"}
+                      </span>
+                    ) : n.recipient_id ? (
+                      <span className="font-semibold text-foreground">
+                        👤 Only to: {recipient?.name || "Specific Housemate"}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">📢 Sent to all housemates</span>
+                    )
+                  ) : isSentByMe ? (
+                    <span className="font-semibold text-primary">📤 Sent to Admin</span>
+                  ) : isTargetedToMe ? (
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">
+                      🔒 For you specifically
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">📢 Sent to all housemates</span>
+                  )}
                 </div>
               </article>
             );
@@ -239,18 +288,18 @@ export function DashboardPage() {
   const nav = useNavigate();
 
   return (
-    <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-3xl bg-primary-soft p-6 sm:p-8">
-        <p className="text-sm text-accent-foreground">
+    <div className="space-y-6 sm:space-y-8 min-w-0">
+      <section className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-primary-soft p-4 sm:p-6 lg:p-8 min-w-0">
+        <p className="text-xs sm:text-sm text-accent-foreground">
           {monthLabel(w.month)} · {w.isAdmin ? "Admin overview" : "Member overview (View-Only)"}
         </p>
-        <h1 className="mt-2 text-3xl font-extrabold">
+        <h1 className="mt-1 sm:mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight truncate">
           Welcome, {w.own?.name?.split(" ")[0] ?? "housemate"}.
         </h1>
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-1.5 sm:mt-3 text-xs sm:text-sm text-muted-foreground truncate">
           {w.mess?.name} · A good month starts around the table.
         </p>
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-4 sm:mt-6 flex flex-wrap gap-2 sm:gap-3">
           {w.isAdmin ? (
             <>
               <LiveDialog kind="expense" />
@@ -258,21 +307,24 @@ export function DashboardPage() {
               <SendNotificationDialog />
             </>
           ) : (
-            <Button onClick={() => nav({ to: "/accounts" })}>
-              My account <ArrowRight />
-            </Button>
+            <>
+              <Button onClick={() => nav({ to: "/accounts" })}>
+                My account <ArrowRight />
+              </Button>
+              <MessageAdminDialog />
+            </>
           )}
         </div>
       </section>
 
       {w.isAdmin && w.members.length <= 1 && (
-        <div className="rounded-3xl border border-primary/30 bg-primary/5 p-6 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-primary">
+        <div className="rounded-2xl sm:rounded-3xl border border-primary/30 bg-primary/5 p-4 sm:p-6 shadow-xs min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+            <div className="min-w-0">
+              <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-primary">
                 Get Started
               </span>
-              <h2 className="text-xl font-extrabold text-foreground mt-0.5">
+              <h2 className="text-lg sm:text-xl font-extrabold text-foreground mt-0.5 truncate">
                 Invite your housemates to join!
               </h2>
               <p className="text-xs text-muted-foreground mt-1 max-w-lg">
@@ -494,16 +546,21 @@ export function MembersPage() {
         onChange={(e) => setQ(e.target.value)}
         className="mb-5 max-w-md bg-card"
       />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3 min-w-0">
         {w.members
           .filter((m) => m.name.toLowerCase().includes(q.toLowerCase()))
           .map((m) => (
-            <article key={m.id} className="rounded-2xl border bg-card p-5 shadow-card">
-              <div className="flex items-center gap-3">
+            <article
+              key={m.id}
+              className="rounded-2xl border bg-card p-4 sm:p-5 shadow-card min-w-0"
+            >
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <Avatar name={m.name} tone={m.tone} />
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate font-bold">{m.name}</h2>
-                  <p className="text-xs text-muted-foreground">
+                  <h2 className="truncate font-bold text-sm sm:text-base text-foreground">
+                    {m.name}
+                  </h2>
+                  <p className="truncate text-[11px] sm:text-xs text-muted-foreground">
                     {m.role === "admin" ? "Admin" : "Member"}
                     {m.room && ` · Room ${m.room}`}
                   </p>
@@ -512,15 +569,17 @@ export function MembersPage() {
                   status={m.status === "left" ? "Left" : m.status === "new" ? "New" : "Active"}
                 />
               </div>
-              <p className="mt-4 text-xs text-muted-foreground">Joined {m.joined}</p>
+              <p className="mt-3 sm:mt-4 text-[11px] sm:text-xs text-muted-foreground">
+                Joined {m.joined}
+              </p>
               {w.isAdmin && m.role !== "admin" && (
-                <div className="mt-4 flex items-center gap-2">
+                <div className="mt-3 sm:mt-4 flex items-center gap-2 min-w-0">
                   <select
                     aria-label={`Status for ${m.name}`}
                     value={m.status}
                     disabled={save.isPending || deletingId === m.id}
                     onChange={(e) => save.mutate({ id: m.id, status: e.target.value })}
-                    className="h-10 flex-1 rounded-xl border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="h-9 sm:h-10 flex-1 rounded-xl border bg-background px-2.5 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary truncate"
                   >
                     <option value="active">Active</option>
                     <option value="new">New</option>
@@ -534,7 +593,7 @@ export function MembersPage() {
                         size="icon"
                         disabled={deletingId === m.id}
                         aria-label={`Delete ${m.name}`}
-                        className="h-10 w-10 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -637,37 +696,72 @@ export function MealsPage() {
         )}
       </div>
 
+      {!w.isAdmin && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-primary/25 bg-primary/5 p-3.5 sm:p-4 min-w-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="grid h-9 w-9 sm:h-10 sm:w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <UtensilsCrossed className="h-4 w-4 sm:h-5 sm:w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs sm:text-sm font-bold text-foreground truncate">
+                Need to turn off a meal?
+              </p>
+              <p className="text-[11px] sm:text-xs text-muted-foreground truncate">
+                Eating out today or going home? Notify your manager with 1 tap.
+              </p>
+            </div>
+          </div>
+          <MessageAdminDialog
+            trigger={
+              <Button
+                size="sm"
+                className="gap-1.5 sm:gap-2 font-bold shadow-xs text-xs h-8 sm:h-9 shrink-0"
+              >
+                <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                Notify Admin (Meal OFF)
+              </Button>
+            }
+            defaultPreset="dinner_off"
+          />
+        </div>
+      )}
+
       {visible.map((m) => (
         <article
           key={m.id}
-          className="flex flex-col gap-4 border-b py-4 sm:flex-row sm:items-center"
+          className="flex flex-col gap-3 border-b py-3.5 sm:flex-row sm:items-center sm:justify-between min-w-0"
         >
-          <div className="flex flex-1 items-center gap-3">
+          <div className="flex flex-1 items-center gap-2.5 sm:gap-3 min-w-0">
             <Avatar name={m.name} />
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold">{m.name}</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="font-semibold text-xs sm:text-sm truncate">{m.name}</span>
               {w.meals.some(
                 (meal) =>
                   meal.member_id === m.id &&
                   meal.date === day &&
                   (pendingIds.has(meal.id) || meal.id.startsWith("ml_offline_")),
               ) && (
-                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300 shrink-0">
                   Pending sync
                 </span>
               )}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 min-w-0 w-full sm:w-auto">
             {slots.map((k) => (
-              <div key={k} className="rounded-xl bg-card p-2 text-center">
-                <p className="mb-2 text-[11px] capitalize text-muted-foreground">{k}</p>
+              <div
+                key={k}
+                className="rounded-xl bg-card p-1.5 sm:p-2 text-center min-w-[70px] sm:min-w-[85px]"
+              >
+                <p className="mb-1 sm:mb-2 text-[10px] sm:text-[11px] capitalize text-muted-foreground">
+                  {k}
+                </p>
                 <div className="flex items-center justify-center gap-1">
                   {w.isAdmin && (
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className="h-6 w-6 sm:h-7 sm:w-7 p-0"
                       aria-label={`Less ${k} for ${m.name}`}
                       onClick={() =>
                         setDraft({
@@ -676,15 +770,17 @@ export function MealsPage() {
                         })
                       }
                     >
-                      <Minus />
+                      <Minus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     </Button>
                   )}
-                  <span className="w-8 font-bold">{row(m.id)[k]}</span>
+                  <span className="w-6 sm:w-8 text-center text-xs sm:text-sm font-bold">
+                    {row(m.id)[k]}
+                  </span>
                   {w.isAdmin && (
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-7 w-7"
+                      className="h-6 w-6 sm:h-7 sm:w-7 p-0"
                       aria-label={`More ${k} for ${m.name}`}
                       onClick={() =>
                         setDraft({
@@ -693,7 +789,7 @@ export function MealsPage() {
                         })
                       }
                     >
-                      <Plus />
+                      <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     </Button>
                   )}
                 </div>
@@ -957,33 +1053,41 @@ export function AccountsPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl bg-primary-soft p-5">
-          <h2 className="font-bold">Meal rate</h2>
-          <p className="mt-3 text-3xl font-extrabold">৳{w.rate.toFixed(2)}</p>
-          <p className="mt-2 text-xs text-muted-foreground">
+      <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 min-w-0">
+        <div className="rounded-2xl bg-primary-soft p-4 sm:p-5 min-w-0">
+          <h2 className="text-xs sm:text-sm font-bold text-foreground">Meal rate</h2>
+          <p className="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight truncate">
+            ৳{w.rate.toFixed(2)}
+          </p>
+          <p className="mt-1 text-[11px] sm:text-xs text-muted-foreground truncate">
             ৳{Number(w.summary.food).toLocaleString("en-IN")} food ÷ {w.summary.total_meals} meals
           </p>
         </div>
-        <div className="rounded-2xl bg-peach p-5">
-          <h2 className="font-bold">Household share</h2>
-          <p className="mt-3 text-3xl font-extrabold">৳{w.shared.toFixed(2)}</p>
-          <p className="mt-2 text-xs text-peach-foreground">
+        <div className="rounded-2xl bg-peach p-4 sm:p-5 min-w-0">
+          <h2 className="text-xs sm:text-sm font-bold text-foreground">Household share</h2>
+          <p className="mt-1.5 sm:mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight truncate">
+            ৳{w.shared.toFixed(2)}
+          </p>
+          <p className="mt-1 text-[11px] sm:text-xs text-peach-foreground truncate">
             ৳{Number(w.summary.household).toLocaleString("en-IN")} ÷ {w.summary.active_members}{" "}
             active members · separate from meal rate
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2 min-w-0">
         {rows.map((m) => (
-          <article key={m.id} className="rounded-2xl border bg-card p-5">
-            <div className="flex items-center gap-3">
-              <Avatar name={m.name} />
-              <h2 className="min-w-0 flex-1 truncate font-bold">{m.name}</h2>
-              <Money value={m.balance} signed />
+          <article key={m.id} className="rounded-2xl border bg-card p-4 sm:p-5 min-w-0 shadow-xs">
+            <div className="flex items-center justify-between gap-2.5 min-w-0">
+              <div className="flex min-w-0 items-center gap-2.5 flex-1">
+                <Avatar name={m.name} size="sm" />
+                <h2 className="truncate font-bold text-sm sm:text-base text-foreground">
+                  {m.name}
+                </h2>
+              </div>
+              <Money value={m.balance} signed className="shrink-0 text-sm sm:text-base font-bold" />
             </div>
-            <dl className="mt-5 space-y-3">
+            <dl className="mt-4 space-y-2.5 sm:mt-5 sm:space-y-3">
               {[
                 ["Meals", String(m.meals)],
                 ["Meal cost", `৳${m.mealCost.toFixed(2)}`],
@@ -991,7 +1095,10 @@ export function AccountsPage() {
                 ["Total charges", `৳${m.due.toFixed(2)}`],
                 ["Paid", `৳${m.deposits.toFixed(2)}`],
               ].map(([k, v]) => (
-                <div key={k} className="flex justify-between border-b pb-2 text-sm">
+                <div
+                  key={k}
+                  className="flex justify-between border-b pb-1.5 sm:pb-2 text-xs sm:text-sm"
+                >
                   <dt className="text-muted-foreground">{k}</dt>
                   <dd className="font-semibold">{v}</dd>
                 </div>

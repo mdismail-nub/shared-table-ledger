@@ -640,26 +640,26 @@ function JoinMessPage() {
       {inviteData ? (
         <div className="space-y-6">
           {/* Main Invitation Card */}
-          <div className="rounded-3xl border border-border/70 bg-card p-6 shadow-sm sm:p-8">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <Home className="h-6 w-6" />
+          <div className="rounded-2xl border border-border/70 bg-card p-4 shadow-sm sm:rounded-3xl sm:p-8">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4 sm:pb-5">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl sm:rounded-2xl bg-primary/10 text-primary shrink-0">
+                  <Home className="h-5 w-5 sm:h-6 sm:w-6" />
                 </div>
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-primary">
+                <div className="min-w-0">
+                  <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-primary">
                     Mess Invitation
                   </span>
-                  <h1 className="text-2xl font-black text-foreground sm:text-3xl">
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-foreground truncate">
                     {inviteData.name}
                   </h1>
                 </div>
               </div>
-              <div className="rounded-xl bg-muted px-3 py-1.5 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <div className="rounded-xl bg-muted px-2.5 py-1 sm:px-3 sm:py-1.5 text-center shrink-0">
+                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                   Invite Code
                 </p>
-                <p className="font-mono text-base font-extrabold tracking-widest text-foreground">
+                <p className="font-mono text-sm sm:text-base font-extrabold tracking-widest text-foreground">
                   {inviteData.code}
                 </p>
               </div>

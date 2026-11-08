@@ -679,7 +679,7 @@ function Welcome() {
                       required
                       autoComplete="one-time-code"
                       placeholder="000000"
-                      className="mt-2 h-16 bg-card text-center text-3xl font-bold tracking-[0.35em]"
+                      className="mt-2 h-14 sm:h-16 bg-card text-center text-2xl sm:text-3xl font-bold tracking-[0.2em] sm:tracking-[0.35em]"
                     />
                     <div className="mt-3 text-center">
                       <Link

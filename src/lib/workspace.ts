@@ -41,7 +41,11 @@ export const workspaceOptions = (month = currentMonth()) =>
       if (memberSession?.code) {
         try {
           const sRes = await loadWorkspaceByCodeFn({
-            data: { code: memberSession.code, month },
+            data: {
+              code: memberSession.code,
+              month,
+              memberId: memberSession.memberId || undefined,
+            },
           });
           if (sRes) {
             const fullRecord = {
@@ -82,7 +86,11 @@ export const workspaceOptions = (month = currentMonth()) =>
           // ignore
         }
 
-        const storeData = getMessDataByCode(memberSession.code, month);
+        const storeData = getMessDataByCode(
+          memberSession.code,
+          month,
+          memberSession.memberId || undefined,
+        );
         if (storeData) {
           const payload: WorkspacePayload = {
             mess: storeData.mess,
@@ -394,13 +402,34 @@ export function useWorkspace() {
   const members = (data?.members ?? []) as Member[];
   const meals = (data?.meals ?? []) as Meal[];
   const payments = (data?.payments ?? []) as Payment[];
-  const notifications = (data?.notifications ?? []) as NotificationItem[];
+  const rawNotifications = (data?.notifications ?? []) as NotificationItem[];
   const ledger = buildLedger(members, meals, payments, rate, shared);
 
   const own =
     ledger.find((m) =>
       data?.userId ? m.id === data.userId || m.user_id === data.userId : false,
     ) || ledger[0];
+
+  const myMemberId = data?.userId || own?.id;
+  const myUserId = own?.user_id;
+
+  // Filter notifications: normal members only see broadcasts, notices sent specifically to them, or messages they sent
+  const seenNotifKeys = new Set<string>();
+  const notifications = rawNotifications.filter((n) => {
+    // Deduplicate by ID and content key to guarantee a notification never shows twice
+    const dedupeKey = `${n.id}_${n.title}_${n.created_at.slice(0, 16)}`;
+    if (seenNotifKeys.has(dedupeKey)) return false;
+    seenNotifKeys.add(dedupeKey);
+
+    if (data?.isAdmin) return true;
+    if (!n.recipient_id || n.recipient_id === "" || n.recipient_id === "all") return true;
+    if (myMemberId && n.recipient_id === myMemberId) return true;
+    if (myUserId && n.recipient_id === myUserId) return true;
+    if (myMemberId && n.sender_id === myMemberId) return true;
+    if (myUserId && n.sender_id === myUserId) return true;
+    if (own?.id && (n.recipient_id === own.id || n.sender_id === own.id)) return true;
+    return false;
+  });
 
   return {
     ...data,

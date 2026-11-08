@@ -24,10 +24,14 @@ export const createMessFn = createServerFn({ method: "POST" })
   });
 
 export const loadWorkspaceByCodeFn = createServerFn({ method: "POST" })
-  .validator((d: { code: string; month: string }) => d)
+  .validator((d: { code: string; month: string; memberId?: string | undefined }) => d)
   .handler(async ({ data }) => {
     const { serverGetWorkspace } = await import("./server-storage.server");
-    return serverGetWorkspace({ code: data.code, month: data.month });
+    return serverGetWorkspace({
+      code: data.code,
+      month: data.month,
+      memberId: data.memberId,
+    });
   });
 
 export const loadWorkspaceByIdFn = createServerFn({ method: "POST" })
