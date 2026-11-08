@@ -22,6 +22,8 @@ import {
   updateMessSettingsInStore,
   regenerateInviteCodeInStore,
 } from "./mess-store";
+import { enqueueSyncOperation } from "./offline-db";
+import { executePendingSync, registerBackgroundSync } from "./offline-sync";
 
 export type Member = {
   id: string;
@@ -578,20 +580,33 @@ const storeDb = {
     insert: async (payload: AnyData) => {
       const admin = getAdminSession();
       if (admin) {
+        let added: AnyData = null;
         if (table === "mess_members") {
-          const added = addMemberToStore(admin.messId, payload);
-          return { data: added, error: null };
+          added = addMemberToStore(admin.messId, payload);
+        } else if (table === "mess_expenses") {
+          added = addExpenseToStore(admin.messId, payload);
+        } else if (table === "payments") {
+          added = addPaymentToStore(admin.messId, payload);
+        } else if (table === "mess_notifications") {
+          added = addNotificationToStore(admin.messId, payload);
         }
-        if (table === "mess_expenses") {
-          const added = addExpenseToStore(admin.messId, payload);
-          return { data: added, error: null };
-        }
-        if (table === "payments") {
-          const added = addPaymentToStore(admin.messId, payload);
-          return { data: added, error: null };
-        }
-        if (table === "mess_notifications") {
-          const added = addNotificationToStore(admin.messId, payload);
+
+        if (added) {
+          const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+          await enqueueSyncOperation({
+            uuid,
+            messId: admin.messId,
+            table,
+            action: "insert",
+            payload: added,
+          });
+
+          if (typeof navigator !== "undefined" && navigator.onLine) {
+            executePendingSync(admin.messId).catch(() => {});
+          } else {
+            registerBackgroundSync();
+          }
+
           return { data: added, error: null };
         }
       }
@@ -603,6 +618,21 @@ const storeDb = {
       if (admin && table === "mess_meals") {
         const items = Array.isArray(payload) ? payload : [payload];
         const results = items.map((item) => upsertMealInStore(admin.messId, item));
+        for (const item of results) {
+          const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+          await enqueueSyncOperation({
+            uuid,
+            messId: admin.messId,
+            table: "mess_meals",
+            action: "upsert",
+            payload: item,
+          });
+        }
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          executePendingSync(admin.messId).catch(() => {});
+        } else {
+          registerBackgroundSync();
+        }
         return { data: results, error: null };
       }
       return (supabase.from(table as AnyData) as AnyData).upsert(payload, _opts);
@@ -614,10 +644,38 @@ const storeDb = {
         if (admin) {
           if (table === "mess_members" && col === "id") {
             updateMemberStatusInStore(admin.messId, val, payload.status);
+            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await enqueueSyncOperation({
+              uuid,
+              messId: admin.messId,
+              table: "mess_members",
+              action: "update",
+              payload,
+              col,
+              val,
+            });
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              executePendingSync(admin.messId).catch(() => {});
+            } else {
+              registerBackgroundSync();
+            }
             return { data: null, error: null };
           }
           if (table === "messes") {
             const updated = updateMessSettingsInStore(admin.messId, payload);
+            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await enqueueSyncOperation({
+              uuid,
+              messId: admin.messId,
+              table: "messes",
+              action: "update",
+              payload,
+            });
+            if (typeof navigator !== "undefined" && navigator.onLine) {
+              executePendingSync(admin.messId).catch(() => {});
+            } else {
+              registerBackgroundSync();
+            }
             return { data: updated, error: null };
           }
         }
@@ -631,76 +689,31 @@ const storeDb = {
         if (admin && col === "id") {
           if (table === "mess_members") {
             deleteMemberFromStore(admin.messId, val);
-            try {
-              const { saveRecordFn } = await import("./mess.functions");
-              await saveRecordFn({
-                data: {
-                  messId: admin.messId,
-                  table: "mess_members",
-                  action: "delete",
-                  col: "id",
-                  val,
-                },
-              });
-            } catch {
-              // ignore
-            }
-            return { data: null, error: null };
-          }
-          if (table === "mess_expenses") {
+          } else if (table === "mess_expenses") {
             deleteExpenseFromStore(admin.messId, val);
-            try {
-              const { saveRecordFn } = await import("./mess.functions");
-              await saveRecordFn({
-                data: {
-                  messId: admin.messId,
-                  table: "mess_expenses",
-                  action: "delete",
-                  col: "id",
-                  val,
-                },
-              });
-            } catch {
-              // ignore
-            }
-            return { data: null, error: null };
-          }
-          if (table === "payments") {
+          } else if (table === "payments") {
             deletePaymentFromStore(admin.messId, val);
-            try {
-              const { saveRecordFn } = await import("./mess.functions");
-              await saveRecordFn({
-                data: {
-                  messId: admin.messId,
-                  table: "payments",
-                  action: "delete",
-                  col: "id",
-                  val,
-                },
-              });
-            } catch {
-              // ignore
-            }
-            return { data: null, error: null };
-          }
-          if (table === "mess_notifications") {
+          } else if (table === "mess_notifications") {
             deleteNotificationFromStore(admin.messId, val);
-            try {
-              const { saveRecordFn } = await import("./mess.functions");
-              await saveRecordFn({
-                data: {
-                  messId: admin.messId,
-                  table: "mess_notifications",
-                  action: "delete",
-                  col: "id",
-                  val,
-                },
-              });
-            } catch {
-              // ignore
-            }
-            return { data: null, error: null };
           }
+
+          const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+          await enqueueSyncOperation({
+            uuid,
+            messId: admin.messId,
+            table,
+            action: "delete",
+            col: "id",
+            val,
+          });
+
+          if (typeof navigator !== "undefined" && navigator.onLine) {
+            executePendingSync(admin.messId).catch(() => {});
+          } else {
+            registerBackgroundSync();
+          }
+
+          return { data: null, error: null };
         }
         return (supabase.from(table as AnyData) as AnyData).delete().eq(col, val);
       },

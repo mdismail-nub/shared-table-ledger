@@ -26,6 +26,9 @@ import {
 } from "@/lib/data";
 import { useWorkspace } from "@/lib/workspace";
 import { NotificationDrawer } from "@/components/app/notification-dialog";
+import { usePwa } from "@/lib/pwa";
+import { useOnlineStatus } from "@/lib/offline-sync";
+import { Download, WifiOff, RefreshCw, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -60,6 +63,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function WorkspaceShell({ children }: { children: ReactNode }) {
   const w = useWorkspace();
+  const pwa = usePwa();
+  const online = useOnlineStatus();
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -106,6 +111,19 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
+        {pwa.isInstallable && !pwa.isStandalone && (
+          <div className="mb-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => pwa.promptInstall()}
+              className="w-full justify-start gap-2 border-primary/30 bg-primary/5 text-primary hover:bg-primary/10 font-bold"
+            >
+              <Download className="h-4 w-4" />
+              Install App
+            </Button>
+          </div>
+        )}
         <div className="rounded-2xl bg-lime p-4">
           <p className="text-xs font-semibold">Around your table</p>
           <p className="mt-2 text-2xl font-extrabold">{w.summary.active_members} housemates</p>
@@ -117,6 +135,32 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div className="min-w-0 flex-1">
+        {pwa.hasUpdate && (
+          <div className="bg-primary px-4 py-2 text-center text-xs font-semibold text-primary-foreground flex items-center justify-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>A new version of Mess Manager is ready.</span>
+            <button
+              onClick={() => pwa.updateApp()}
+              className="ml-2 rounded-lg bg-white/20 px-2.5 py-1 text-xs font-bold hover:bg-white/30"
+            >
+              Update Now
+            </button>
+          </div>
+        )}
+        {!online.isOnline && (
+          <div className="bg-amber-500/15 border-b border-amber-500/20 px-4 py-2 text-center text-xs font-medium text-amber-800 dark:text-amber-200 flex flex-wrap items-center justify-center gap-2">
+            <WifiOff className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+            <span>
+              You're currently offline. You can keep adding meals, expenses & payments — changes
+              sync automatically when reconnected.
+            </span>
+            {online.pendingCount > 0 && (
+              <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:text-amber-100">
+                {online.pendingCount} pending sync
+              </span>
+            )}
+          </div>
+        )}
         <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-xl">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-7">
             <div className="flex min-w-0 items-center gap-3">
@@ -138,6 +182,40 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              {!online.isOnline && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:text-amber-300"
+                  title="Offline Mode"
+                >
+                  <WifiOff className="h-3 w-3" />
+                  <span className="hidden sm:inline">Offline</span>
+                </span>
+              )}
+              {online.isOnline && online.pendingCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => online.syncNow()}
+                  disabled={online.isSyncing}
+                  className="h-9 gap-1.5 text-xs text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 font-medium"
+                  title="Click to sync pending changes now"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", online.isSyncing && "animate-spin")} />
+                  <span>{online.isSyncing ? "Syncing..." : `${online.pendingCount} pending`}</span>
+                </Button>
+              )}
+              {pwa.isInstallable && !pwa.isStandalone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => pwa.promptInstall()}
+                  className="hidden sm:inline-flex gap-1.5 border-primary/30 text-primary hover:bg-primary/5 font-semibold text-xs h-9"
+                  title="Install Mess Manager as an app"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Install App
+                </Button>
+              )}
               <NotificationDrawer />
               <select
                 aria-label="Accounting month"

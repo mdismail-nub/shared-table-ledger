@@ -44,6 +44,10 @@ import { toast } from "sonner";
 import { exportLedger } from "@/lib/export";
 import { SendNotificationDialog } from "./notification-dialog";
 import { createMessInviteLink } from "@/lib/invite";
+import { usePwa } from "@/lib/pwa";
+import { useOnlineStatus, usePendingEntities } from "@/lib/offline-sync";
+import { Smartphone, HardDrive, Wifi, WifiOff, CheckCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 function ConfirmDeleteDialog({
   title,
@@ -565,6 +569,7 @@ export function MembersPage() {
 
 export function MealsPage() {
   const w = useWorkspace();
+  const pendingIds = usePendingEntities();
   const year = Number(w.month.slice(0, 4));
   const monthNum = Number(w.month.slice(5, 7));
   const lastDay = new Date(year, monthNum, 0).getDate();
@@ -639,7 +644,19 @@ export function MealsPage() {
         >
           <div className="flex flex-1 items-center gap-3">
             <Avatar name={m.name} />
-            <span className="font-semibold">{m.name}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold">{m.name}</span>
+              {w.meals.some(
+                (meal) =>
+                  meal.member_id === m.id &&
+                  meal.date === day &&
+                  (pendingIds.has(meal.id) || meal.id.startsWith("ml_offline_")),
+              ) && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                  Pending sync
+                </span>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {slots.map((k) => (
@@ -720,6 +737,7 @@ export function MealsPage() {
 
 function PaymentList({ limit }: { limit?: number }) {
   const w = useWorkspace();
+  const pendingIds = usePendingEntities();
   const save = useSave(
     async (id: string) => await db.from("payments").delete().eq("id", id),
     "Payment removed",
@@ -747,9 +765,16 @@ function PaymentList({ limit }: { limit?: number }) {
                 <p className="truncate font-semibold">
                   {w.members.find((m: { id: string }) => m.id === p.member_id)?.name}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {p.date} · {p.method} {p.reference ? `· ${p.reference}` : ""}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {p.date} · {p.method} {p.reference ? `· ${p.reference}` : ""}
+                  </span>
+                  {pendingIds.has(p.id) && (
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                      Pending sync
+                    </span>
+                  )}
+                </div>
               </div>
               <b className="text-success">
                 <Money value={Number(p.amount)} />
@@ -788,6 +813,7 @@ export function PaymentsPage() {
 
 export function ExpensesPage() {
   const w = useWorkspace();
+  const pendingIds = usePendingEntities();
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
   const save = useSave(
@@ -873,9 +899,16 @@ export function ExpensesPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <h2 className="break-words font-semibold">{e.description || e.category}</h2>
-                  <p className="text-xs text-muted-foreground">
-                    {e.category} · {e.date} · {e.method}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>
+                      {e.category} · {e.date} · {e.method}
+                    </span>
+                    {pendingIds.has(e.id) && (
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                        Pending sync
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <b className="shrink-0">
                   <Money value={Number(e.amount)} />
@@ -1236,6 +1269,136 @@ export function SettingsPage() {
           </div>
         </section>
       )}
+
+      <OfflineAndPwaSettings />
     </div>
+  );
+}
+
+function OfflineAndPwaSettings() {
+  const pwa = usePwa();
+  const online = useOnlineStatus();
+
+  return (
+    <section className="border-t pt-6 space-y-5">
+      <div>
+        <h2 className="text-lg font-bold flex items-center gap-2">
+          <Smartphone className="h-5 w-5 text-primary" />
+          Offline App & Sync Status
+        </h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Mess Manager works offline using IndexedDB local storage and can be installed as a
+          standalone app on your devices.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* PWA Installation Card */}
+        <div className="rounded-2xl border bg-card p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold flex items-center gap-2">
+              <Download className="h-4 w-4 text-primary" />
+              App Installation
+            </span>
+            {pwa.isStandalone ? (
+              <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                Installed (Standalone)
+              </span>
+            ) : (
+              <span className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
+                Web Browser
+              </span>
+            )}
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            {pwa.isStandalone
+              ? "Mess Manager is running in standalone native app mode without browser toolbars."
+              : "Install Mess Manager for fast offline access, native icon on your home screen or desktop, and smoother ledger navigation."}
+          </p>
+
+          {!pwa.isStandalone && (
+            <div className="space-y-3 pt-1">
+              {pwa.isInstallable ? (
+                <Button onClick={() => pwa.promptInstall()} className="w-full gap-2 font-bold">
+                  <Download className="h-4 w-4" />
+                  Install Mess Manager
+                </Button>
+              ) : (
+                <div className="rounded-xl bg-secondary/50 p-3 text-xs text-muted-foreground space-y-1.5">
+                  <p className="font-semibold text-foreground">How to install on your device:</p>
+                  <p>
+                    • <b>Android / Chrome:</b> Tap menu (⋮) → &quot;Install app&quot; or &quot;Add
+                    to Home screen&quot;.
+                  </p>
+                  <p>
+                    • <b>Windows / Edge:</b> Click the app icon (⊕) in address bar or menu → Apps →
+                    Install.
+                  </p>
+                  <p>
+                    • <b>iPhone / Safari:</b> Tap Share (⎋) → &quot;Add to Home Screen&quot;.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Offline & Data Sync Card */}
+        <div className="rounded-2xl border bg-card p-5 shadow-card space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-bold flex items-center gap-2">
+              <HardDrive className="h-4 w-4 text-primary" />
+              Offline Storage & Sync
+            </span>
+            {online.isOnline ? (
+              <span className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                <Wifi className="h-3 w-3" /> Online
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                <WifiOff className="h-3 w-3" /> Offline Mode
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between py-1 border-b border-border/50">
+              <span className="text-muted-foreground">Pending synchronization</span>
+              <span className="font-bold">
+                {online.pendingCount > 0 ? `${online.pendingCount} record(s) queued` : "Up to date"}
+              </span>
+            </div>
+            <div className="flex justify-between py-1 border-b border-border/50">
+              <span className="text-muted-foreground">Offline database</span>
+              <span className="font-semibold text-foreground">IndexedDB (Active)</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-muted-foreground">Last synchronized</span>
+              <span className="font-medium text-muted-foreground">
+                {online.lastSync
+                  ? new Date(online.lastSync).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })
+                  : "Recently"}
+              </span>
+            </div>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => online.syncNow()}
+            disabled={online.isSyncing || !online.isOnline}
+            className="w-full gap-2 text-xs font-semibold"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", online.isSyncing && "animate-spin")} />
+            {online.isSyncing ? "Synchronizing Data..." : "Force Sync Now"}
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -17,6 +17,7 @@ import { buildLedger, mealRate } from "./accounting";
 import { supabase } from "@/integrations/supabase/client";
 import { getAdminSession, getMessDataById, getMessDataByCode, saveStoredMess } from "./mess-store";
 import { loadWorkspaceByCodeFn, loadWorkspaceByIdFn } from "./mess.functions";
+import { cacheWorkspaceToIndexedDB, getCachedWorkspaceFromIndexedDB } from "./offline-db";
 
 export interface WorkspacePayload {
   mess: Mess;
@@ -53,7 +54,7 @@ export const workspaceOptions = (month = currentMonth()) =>
             };
             saveStoredMess(sRes.mess.id, fullRecord);
 
-            return {
+            const payload: WorkspacePayload = {
               mess: sRes.mess,
               members: (sRes.members ?? []) as Member[],
               isAdmin: false,
@@ -64,6 +65,8 @@ export const workspaceOptions = (month = currentMonth()) =>
               notifications: (sRes.notifications ?? []) as NotificationItem[],
               userId: memberSession.memberId,
             };
+            cacheWorkspaceToIndexedDB(sRes.mess.id, month, payload).catch(() => {});
+            return payload;
           }
         } catch {
           // ignore
@@ -81,7 +84,7 @@ export const workspaceOptions = (month = currentMonth()) =>
 
         const storeData = getMessDataByCode(memberSession.code, month);
         if (storeData) {
-          return {
+          const payload: WorkspacePayload = {
             mess: storeData.mess,
             members: storeData.members,
             isAdmin: false,
@@ -92,6 +95,17 @@ export const workspaceOptions = (month = currentMonth()) =>
             notifications: storeData.notifications,
             userId: memberSession.memberId,
           };
+          cacheWorkspaceToIndexedDB(storeData.mess.id, month, payload).catch(() => {});
+          return payload;
+        }
+
+        // Check offline IndexedDB cache if available
+        const cachedWs = await getCachedWorkspaceFromIndexedDB<WorkspacePayload>(
+          memberSession.messId || memberSession.code,
+          month,
+        );
+        if (cachedWs) {
+          return cachedWs;
         }
 
         try {
@@ -198,7 +212,7 @@ export const workspaceOptions = (month = currentMonth()) =>
             };
             saveStoredMess(adminSession.messId, fullRecord);
 
-            return {
+            const payload: WorkspacePayload = {
               mess: sRes.mess,
               members: (sRes.members ?? []) as Member[],
               isAdmin: true,
@@ -209,6 +223,8 @@ export const workspaceOptions = (month = currentMonth()) =>
               notifications: (sRes.notifications ?? []) as NotificationItem[],
               userId: adminSession.userId,
             };
+            cacheWorkspaceToIndexedDB(adminSession.messId, month, payload).catch(() => {});
+            return payload;
           }
         } catch {
           // ignore
@@ -226,7 +242,7 @@ export const workspaceOptions = (month = currentMonth()) =>
 
         const storeData = getMessDataById(adminSession.messId, month);
         if (storeData) {
-          return {
+          const payload: WorkspacePayload = {
             mess: storeData.mess,
             members: storeData.members,
             isAdmin: true,
@@ -237,6 +253,17 @@ export const workspaceOptions = (month = currentMonth()) =>
             notifications: storeData.notifications,
             userId: adminSession.userId,
           };
+          cacheWorkspaceToIndexedDB(adminSession.messId, month, payload).catch(() => {});
+          return payload;
+        }
+
+        // Check offline IndexedDB cache if available
+        const cachedAdminWs = await getCachedWorkspaceFromIndexedDB<WorkspacePayload>(
+          adminSession.messId,
+          month,
+        );
+        if (cachedAdminWs) {
+          return cachedAdminWs;
         }
 
         // Safe fallback for adminSession
@@ -302,8 +329,19 @@ export const workspaceOptions = (month = currentMonth()) =>
           data: { user },
         } = await supabase.auth.getUser();
         if (user) {
-          const res = (await loadWorkspace({ data: { month } })) as unknown as WorkspacePayload;
-          if (res?.mess) return res;
+          try {
+            const res = (await loadWorkspace({ data: { month } })) as unknown as WorkspacePayload;
+            if (res?.mess) {
+              cacheWorkspaceToIndexedDB(res.mess.id, month, res).catch(() => {});
+              return res;
+            }
+          } catch {
+            const cachedUserWs = await getCachedWorkspaceFromIndexedDB<WorkspacePayload>(
+              user.id,
+              month,
+            );
+            if (cachedUserWs) return cachedUserWs;
+          }
         }
       } catch {
         // ignore
