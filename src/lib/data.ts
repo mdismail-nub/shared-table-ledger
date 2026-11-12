@@ -7,6 +7,7 @@ import type { Tone } from "@/components/app/ui";
 import {
   getAdminSession,
   clearAdminSession,
+  ADMIN_SESSION_KEY,
   getMessDataById,
   getMessDataByCode,
   addMemberToStore,
@@ -23,7 +24,7 @@ import {
   updateMessSettingsInStore,
   regenerateInviteCodeInStore,
 } from "./mess-store";
-import { enqueueSyncOperation } from "./offline-db";
+import { enqueueSyncOperation, cancelPendingOperationsForEntity } from "./offline-db";
 import { executePendingSync, registerBackgroundSync } from "./offline-sync";
 
 export type Member = {
@@ -107,7 +108,8 @@ export type MemberSession = {
   code: string;
   memberId: string | null;
   memberName: string;
-  messName?: string;
+  messName?: string | undefined;
+  token?: string | undefined;
 };
 
 export const MEMBER_SESSION_KEY = "mm_member_session";
@@ -126,10 +128,12 @@ export function getMemberSession(): MemberSession | null {
 
 export function setMemberSession(session: MemberSession) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(MEMBER_SESSION_KEY, JSON.stringify(session));
+  const serialized = JSON.stringify(session);
+  localStorage.setItem(MEMBER_SESSION_KEY, serialized);
+  sessionStorage.setItem(MEMBER_SESSION_KEY, serialized);
   try {
-    localStorage.removeItem("mess_admin_session");
-    sessionStorage.removeItem("mess_admin_session");
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
   } catch {
     // ignore
   }
@@ -170,7 +174,22 @@ export const recentMonths = (n = 12) => {
     return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`;
   });
 };
-export const today = () => new Date().toISOString().slice(0, 10);
+export function formatLocalDate(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+export const today = () => formatLocalDate(new Date());
+
+export const shortMonthYear = (m: string) => {
+  const parts = m.split("-").map(Number);
+  const y = parts[0] ?? new Date().getFullYear();
+  const mo = parts[1] ?? 1;
+  const d = new Date(y, mo - 1, 1);
+  return d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+};
 
 const num = <T extends Record<string, unknown>>(rows: T[] | null, keys: (keyof T)[]) =>
   (rows ?? []).map((r) => {
@@ -621,27 +640,30 @@ const storeDb = {
                 table: "mess_notifications",
                 action: "insert",
                 payload: item,
+                token: admin?.token || member?.token,
               },
             });
+            if (sRes && (sRes as { error?: string }).error) {
+              return { data: null, error: { message: (sRes as { error: string }).error! } };
+            }
             if (sRes && !(sRes as { error?: string }).error) {
               serverOk = true;
             }
-          } catch {
-            // will enqueue if offline
-          }
+          } catch (err) {
+            const isOffline =
+              (typeof navigator !== "undefined" && !navigator.onLine) ||
+              (err instanceof Error &&
+                (err.message.includes("Failed to fetch") ||
+                  err.message.includes("NetworkError") ||
+                  err.name === "TypeError"));
 
-          // 3. Publish to cloud if reachable
-          try {
-            const rec = getStoredMess(messId);
-            if (rec) {
-              const { publishMessToCloud } = await import("./cloud-sync");
-              await publishMessToCloud(rec);
+            if (!isOffline) {
+              const message = err instanceof Error ? err.message : "Failed to send notification";
+              return { data: null, error: { message } };
             }
-          } catch {
-            // ignore
           }
 
-          // 4. Offline sync queue ONLY if server was unreachable
+          // 3. Offline sync queue ONLY if server was unreachable due to network connectivity
           if (!serverOk) {
             const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             await enqueueSyncOperation({
@@ -685,13 +707,27 @@ const storeDb = {
                 table,
                 action: "insert",
                 payload: added,
+                token: admin.token,
               },
             });
+            if (sRes && (sRes as { error?: string }).error) {
+              return { data: null, error: { message: (sRes as { error: string }).error! } };
+            }
             if (sRes && !(sRes as { error?: string }).error) {
               serverOk = true;
             }
-          } catch {
-            // will enqueue if offline
+          } catch (err) {
+            const isOffline =
+              (typeof navigator !== "undefined" && !navigator.onLine) ||
+              (err instanceof Error &&
+                (err.message.includes("Failed to fetch") ||
+                  err.message.includes("NetworkError") ||
+                  err.name === "TypeError"));
+
+            if (!isOffline) {
+              const message = err instanceof Error ? err.message : `Failed to save ${table}`;
+              return { data: null, error: { message } };
+            }
           }
 
           if (!serverOk) {
@@ -799,6 +835,12 @@ const storeDb = {
           if (messId) {
             deleteNotificationFromStore(messId, val);
 
+            // If an insert/update was pending offline, cancel it so replay cannot resurrect it
+            const cancelled = await cancelPendingOperationsForEntity(table, val);
+            if (cancelled > 0) {
+              return { data: null, error: null };
+            }
+
             let serverOk = false;
             try {
               const { saveRecordFn } = await import("./mess.functions");
@@ -809,13 +851,27 @@ const storeDb = {
                   action: "delete",
                   col: "id",
                   val,
+                  token: admin?.token || member?.token,
                 },
               });
+              if (sRes && (sRes as { error?: string }).error) {
+                return { data: null, error: { message: (sRes as { error: string }).error! } };
+              }
               if (sRes && !(sRes as { error?: string }).error) {
                 serverOk = true;
               }
-            } catch {
-              // offline
+            } catch (err) {
+              const isOffline =
+                (typeof navigator !== "undefined" && !navigator.onLine) ||
+                (err instanceof Error &&
+                  (err.message.includes("Failed to fetch") ||
+                    err.message.includes("NetworkError") ||
+                    err.name === "TypeError"));
+
+              if (!isOffline) {
+                const message = err instanceof Error ? err.message : "Failed to delete notification";
+                return { data: null, error: { message } };
+              }
             }
 
             if (!serverOk) {
@@ -851,6 +907,12 @@ const storeDb = {
             deleteNotificationFromStore(admin.messId, val);
           }
 
+          // If an insert/update was pending offline, cancel it so replay cannot resurrect it
+          const cancelled = await cancelPendingOperationsForEntity(table, val);
+          if (cancelled > 0) {
+            return { data: null, error: null };
+          }
+
           let serverOk = false;
           try {
             const { saveRecordFn } = await import("./mess.functions");
@@ -861,13 +923,27 @@ const storeDb = {
                 action: "delete",
                 col: "id",
                 val,
+                token: admin.token,
               },
             });
+            if (sRes && (sRes as { error?: string }).error) {
+              return { data: null, error: { message: (sRes as { error: string }).error! } };
+            }
             if (sRes && !(sRes as { error?: string }).error) {
               serverOk = true;
             }
-          } catch {
-            // offline
+          } catch (err) {
+            const isOffline =
+              (typeof navigator !== "undefined" && !navigator.onLine) ||
+              (err instanceof Error &&
+                (err.message.includes("Failed to fetch") ||
+                  err.message.includes("NetworkError") ||
+                  err.name === "TypeError"));
+
+            if (!isOffline) {
+              const message = err instanceof Error ? err.message : `Failed to delete from ${table}`;
+              return { data: null, error: { message } };
+            }
           }
 
           if (!serverOk) {

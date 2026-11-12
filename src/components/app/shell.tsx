@@ -22,6 +22,7 @@ import {
   currentMonth,
   recentMonths,
   monthLabel,
+  shortMonthYear,
   signOut,
 } from "@/lib/data";
 import { useWorkspace } from "@/lib/workspace";
@@ -229,7 +230,7 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
               >
                 {months.map((m) => (
                   <option key={m} value={m}>
-                    {monthLabel(m)}
+                    {shortMonthYear(m)}
                   </option>
                 ))}
               </select>

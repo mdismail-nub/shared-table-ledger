@@ -45,6 +45,7 @@ export const workspaceOptions = (month = currentMonth()) =>
               code: memberSession.code,
               month,
               memberId: memberSession.memberId || undefined,
+              token: memberSession.token,
             },
           });
           if (sRes) {
@@ -71,16 +72,6 @@ export const workspaceOptions = (month = currentMonth()) =>
             };
             cacheWorkspaceToIndexedDB(sRes.mess.id, month, payload).catch(() => {});
             return payload;
-          }
-        } catch {
-          // ignore
-        }
-
-        try {
-          const { fetchMessFromCloudByCode } = await import("./cloud-sync");
-          const cloud = await fetchMessFromCloudByCode(memberSession.code);
-          if (cloud) {
-            saveStoredMess(cloud.mess.id, cloud);
           }
         } catch {
           // ignore
@@ -207,7 +198,7 @@ export const workspaceOptions = (month = currentMonth()) =>
       if (adminSession) {
         try {
           const sRes = await loadWorkspaceByIdFn({
-            data: { messId: adminSession.messId, month },
+            data: { messId: adminSession.messId, month, token: adminSession.token },
           });
           if (sRes) {
             const fullRecord = {
@@ -233,16 +224,6 @@ export const workspaceOptions = (month = currentMonth()) =>
             };
             cacheWorkspaceToIndexedDB(adminSession.messId, month, payload).catch(() => {});
             return payload;
-          }
-        } catch {
-          // ignore
-        }
-
-        try {
-          const { fetchMessFromCloudById } = await import("./cloud-sync");
-          const cloud = await fetchMessFromCloudById(adminSession.messId);
-          if (cloud) {
-            saveStoredMess(cloud.mess.id, cloud);
           }
         } catch {
           // ignore
@@ -405,19 +386,18 @@ export function useWorkspace() {
   const rawNotifications = (data?.notifications ?? []) as NotificationItem[];
   const ledger = buildLedger(members, meals, payments, rate, shared);
 
-  const own =
-    ledger.find((m) =>
-      data?.userId ? m.id === data.userId || m.user_id === data.userId : false,
-    ) || ledger[0];
+  const own = ledger.find((m) =>
+    data?.userId ? m.id === data.userId || m.user_id === data.userId : false,
+  );
 
-  const myMemberId = data?.userId || own?.id;
+  const myMemberId = own?.id || (data?.userId && members.some((m) => m.id === data.userId) ? data.userId : undefined);
   const myUserId = own?.user_id;
 
   // Filter notifications: normal members only see broadcasts, notices sent specifically to them, or messages they sent
   const seenNotifKeys = new Set<string>();
   const notifications = rawNotifications.filter((n) => {
-    // Deduplicate by ID and content key to guarantee a notification never shows twice
-    const dedupeKey = `${n.id}_${n.title}_${n.created_at.slice(0, 16)}`;
+    // Deduplicate by ID and recipient key to preserve distinct recipients
+    const dedupeKey = `${n.id}_${n.recipient_id ?? "all"}_${n.title}_${n.created_at.slice(0, 16)}`;
     if (seenNotifKeys.has(dedupeKey)) return false;
     seenNotifKeys.add(dedupeKey);
 

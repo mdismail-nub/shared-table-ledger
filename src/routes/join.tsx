@@ -225,17 +225,6 @@ function JoinMessPage() {
           }
         })
         .catch(() => {});
-
-      // Try to fetch full record from cloud if available (to get any pre-added members)
-      import("@/lib/cloud-sync")
-        .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(parsed.code))
-        .then((cloud) => {
-          if (cloud?.members && cloud.members.length > 0) {
-            setMembersList(cloud.members);
-            saveStoredMess(cloud.mess.id, cloud);
-          }
-        })
-        .catch(() => {});
     } else {
       // Check if URL has ?code=XXXXXX
       const params = new URLSearchParams(window.location.search);
@@ -292,36 +281,7 @@ function JoinMessPage() {
           }
           toast.success(`Mess found: ${local.mess.name}`);
         } else {
-          // 3. Try cloud lookup
-          import("@/lib/cloud-sync")
-            .then(({ fetchMessFromCloudByCode }) => fetchMessFromCloudByCode(clean))
-            .then((cloud) => {
-              if (cloud) {
-                saveStoredMess(cloud.mess.id, cloud);
-                setInviteData({
-                  id: cloud.mess.id,
-                  name: cloud.mess.name,
-                  manager: cloud.mess.manager,
-                  code: clean,
-                  currency: cloud.mess.currency,
-                  memberCount: cloud.members?.filter((m) => m.status !== "left").length,
-                  timestamp: Date.now(),
-                });
-                if (cloud.members && cloud.members.length > 0) {
-                  setMembersList(cloud.members);
-                }
-                toast.success(`Mess found: ${cloud.mess.name}`);
-              } else {
-                toast.error(
-                  "Mess not found for this 6-digit code. Please check with your mess admin.",
-                );
-              }
-            })
-            .catch(() => {
-              toast.error(
-                "Mess not found for this 6-digit code. Please check with your mess admin.",
-              );
-            });
+          toast.error("Mess not found for this 6-digit code. Please check with your mess admin.");
         }
       });
   };
@@ -402,18 +362,6 @@ function JoinMessPage() {
           }
         } catch {
           // ignore
-        }
-
-        if (!currentRecord || currentRecord.members.length === 0) {
-          try {
-            const { fetchMessFromCloudByCode } = await import("@/lib/cloud-sync");
-            const cloud = await fetchMessFromCloudByCode(inviteData.code);
-            if (cloud?.mess) {
-              currentRecord = cloud;
-            }
-          } catch {
-            // ignore
-          }
         }
       }
 
@@ -516,18 +464,37 @@ function JoinMessPage() {
 
         memberIdToUse = newMemId;
         memberNameToUse = cleanName;
+      }
 
-        // Save member directly to server
+      let guestToken: string | undefined;
+      try {
+        const { createGuestSessionFn } = await import("@/lib/mess.functions");
+        const sessionRes = await createGuestSessionFn({
+          data: { code: inviteData.code, memberId: memberIdToUse },
+        });
+        if (sessionRes?.token) {
+          guestToken = sessionRes.token;
+        }
+      } catch {
+        // non-fatal in offline mode
+      }
+
+      // Save member directly to server
+      if (selectedMemberId === "new") {
         try {
           const { saveRecordFn } = await import("@/lib/mess.functions");
-          await saveRecordFn({
-            data: {
-              messId: inviteData.id,
-              table: "mess_members",
-              action: "insert",
-              payload: newMem,
-            },
-          });
+          const targetMem = currentRecord.members.find((m) => m.id === memberIdToUse);
+          if (targetMem) {
+            await saveRecordFn({
+              data: {
+                messId: inviteData.id,
+                table: "mess_members",
+                action: "insert",
+                payload: targetMem,
+                token: guestToken,
+              },
+            });
+          }
         } catch {
           // ignore
         }
@@ -543,19 +510,13 @@ function JoinMessPage() {
         messName: inviteData.name,
         memberId: memberIdToUse,
         memberName: memberNameToUse,
+        token: guestToken,
       });
 
-      // Cloud sync & server sync
-      try {
-        const { publishMessToCloud } = await import("@/lib/cloud-sync");
-        await publishMessToCloud(currentRecord);
-      } catch {
-        // ignore
-      }
-
+      // Server sync
       try {
         const { syncMessToServerFn } = await import("@/lib/mess.functions");
-        await syncMessToServerFn({ data: { record: currentRecord } });
+        await syncMessToServerFn({ data: { record: currentRecord, token: guestToken } });
       } catch {
         // ignore
       }

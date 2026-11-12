@@ -37,7 +37,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { useWorkspace } from "@/lib/workspace";
-import { db, useSave, today, type NotificationItem } from "@/lib/data";
+import { db, useSave, today, formatLocalDate, type NotificationItem } from "@/lib/data";
 
 export function SendNotificationDialog({
   trigger,
@@ -262,9 +262,12 @@ export function MessageAdminDialog({
 
   const save = useSave(async () => {
     if (!w.mess?.id) throw new Error("Mess not found.");
-    const senderName = w.own?.name || "Member";
-    const senderRoom = w.own?.room ? ` (Room ${w.own.room})` : "";
-    const memberId = w.own?.id || w.userId;
+    if (!w.own) {
+      throw new Error("You must be an active, verified member of this mess to send messages.");
+    }
+    const senderName = w.own.name;
+    const senderRoom = w.own.room ? ` (Room ${w.own.room})` : "";
+    const memberId = w.own.id;
 
     let fullTitle = "";
     if (selectedPreset !== "custom") {
@@ -403,7 +406,7 @@ export function MessageAdminDialog({
                   onClick={() => {
                     const d = new Date();
                     d.setDate(d.getDate() + 1);
-                    setMealDate(d.toISOString().slice(0, 10));
+                    setMealDate(formatLocalDate(d));
                   }}
                   className="h-10 text-xs"
                 >
@@ -438,7 +441,17 @@ export function MessageAdminDialog({
             />
           </div>
 
-          <Button type="submit" disabled={save.isPending} className="w-full gap-2 font-bold">
+          {!w.own && (
+            <p className="rounded-lg bg-amber-500/10 p-2.5 text-center text-xs font-medium text-amber-700 dark:text-amber-300">
+              Only verified members of this mess can send notices to the admin.
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            disabled={save.isPending || !w.own}
+            className="w-full gap-2 font-bold"
+          >
             {save.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (

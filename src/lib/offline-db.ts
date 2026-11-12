@@ -89,6 +89,15 @@ function openDatabase(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+// In-memory fallback stores when IndexedDB is not available (e.g. test or SSR environments)
+let memoryQueue: QueuedSyncOperation[] = [];
+const memoryOfflineEntities = new Map<string, unknown>();
+const memoryWorkspaces = new Map<string, CachedWorkspaceRecord>();
+
+function isIndexedDBAvailable(): boolean {
+  return typeof window !== "undefined" && !!window.indexedDB;
+}
+
 // ----------------- WORKSPACE CACHING -----------------
 
 export async function cacheWorkspaceToIndexedDB(
@@ -143,6 +152,29 @@ export async function getCachedWorkspaceFromIndexedDB<T = unknown>(
 export async function enqueueSyncOperation(
   op: Omit<QueuedSyncOperation, "id" | "timestamp" | "status" | "retryCount">,
 ): Promise<number | null> {
+  if (!isIndexedDBAvailable()) {
+    const insertedId = memoryQueue.length + 1;
+    const item: QueuedSyncOperation = {
+      ...op,
+      id: insertedId,
+      timestamp: Date.now(),
+      status: "pending",
+      retryCount: 0,
+    };
+    memoryQueue.push(item);
+    const entityId =
+      (op.payload as { id?: string })?.id || (typeof op.val === "string" ? op.val : null);
+    if (entityId) {
+      memoryOfflineEntities.set(entityId, {
+        id: entityId,
+        queueId: insertedId,
+        action: op.action,
+        table: op.table,
+      });
+    }
+    return insertedId;
+  }
+
   try {
     const db = await openDatabase();
     return new Promise((resolve, reject) => {
@@ -185,6 +217,14 @@ export async function enqueueSyncOperation(
 }
 
 export async function getPendingSyncQueue(messId?: string): Promise<QueuedSyncOperation[]> {
+  if (!isIndexedDBAvailable()) {
+    let results = [...memoryQueue];
+    if (messId) {
+      results = results.filter((item) => item.messId === messId);
+    }
+    return results.sort((a, b) => (a.id || 0) - (b.id || 0));
+  }
+
   try {
     const db = await openDatabase();
     return new Promise((resolve) => {
@@ -209,6 +249,16 @@ export async function getPendingSyncQueue(messId?: string): Promise<QueuedSyncOp
 }
 
 export async function removeSyncQueueItem(id: number): Promise<void> {
+  if (!isIndexedDBAvailable()) {
+    memoryQueue = memoryQueue.filter((item) => item.id !== id);
+    for (const [entityId, val] of memoryOfflineEntities.entries()) {
+      if ((val as { queueId: number }).queueId === id) {
+        memoryOfflineEntities.delete(entityId);
+      }
+    }
+    return;
+  }
+
   try {
     const db = await openDatabase();
     return new Promise((resolve) => {
@@ -287,6 +337,69 @@ export async function isEntityPendingSync(entityId: string): Promise<boolean> {
     });
   } catch {
     return false;
+  }
+}
+
+export async function cancelPendingOperationsForEntity(
+  table: string,
+  entityId: string,
+): Promise<number> {
+  if (!entityId) return 0;
+
+  if (!isIndexedDBAvailable()) {
+    let cancelledCount = 0;
+    memoryQueue = memoryQueue.filter((item) => {
+      const matchesTable = item.table === table;
+      const payloadId = (item.payload as { id?: string })?.id;
+      const matchesPayload = payloadId === entityId || item.val === entityId;
+      if (matchesTable && matchesPayload) {
+        cancelledCount++;
+        return false;
+      }
+      return true;
+    });
+    memoryOfflineEntities.delete(entityId);
+    return cancelledCount;
+  }
+
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const tx = db.transaction(["sync_queue", "offline_entities"], "readwrite");
+      const queueStore = tx.objectStore("sync_queue");
+      const entityStore = tx.objectStore("offline_entities");
+
+      let cancelledCount = 0;
+      const req = queueStore.openCursor();
+
+      req.onsuccess = (e) => {
+        const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          const item = cursor.value as QueuedSyncOperation;
+          const matchesTable = item.table === table;
+          const payloadId = (item.payload as { id?: string })?.id;
+          const matchesPayload = payloadId === entityId || item.val === entityId;
+
+          if (matchesTable && matchesPayload) {
+            cursor.delete();
+            cancelledCount++;
+          }
+          cursor.continue();
+        } else {
+          // Clean up tracking record in offline_entities
+          try {
+            entityStore.delete(entityId);
+          } catch {
+            // ignore
+          }
+        }
+      };
+
+      tx.oncomplete = () => resolve(cancelledCount);
+      tx.onerror = () => resolve(0);
+    });
+  } catch {
+    return 0;
   }
 }
 

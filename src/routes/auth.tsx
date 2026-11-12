@@ -200,14 +200,16 @@ function AuthPage() {
               {busy ? "Signing in…" : "Sign In as Admin"}
             </Button>
 
-            <button
-              type="button"
-              onClick={fillDemo}
-              className="mt-2 w-full py-1.5 text-xs text-primary font-medium flex items-center justify-center gap-1 hover:underline"
-            >
-              <Sparkles className="h-3 w-3" />
-              Quick fill demo credentials (admin@mess.com)
-            </button>
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={fillDemo}
+                className="mt-2 w-full py-1.5 text-xs text-primary font-medium flex items-center justify-center gap-1 hover:underline"
+              >
+                <Sparkles className="h-3 w-3" />
+                Quick fill dev credentials (admin@mess.com)
+              </button>
+            )}
           </form>
         ) : (
           <form onSubmit={handleSignUp} className="mt-6 space-y-3.5">

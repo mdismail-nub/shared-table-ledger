@@ -36,6 +36,13 @@
       "when": 1794048376000,
       "tag": "0004_notifications_and_guest_read",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794048377000,
+      "tag": "0005_restrict_anonymous_access_and_guest_sessions",
+      "breakpoints": true
     }
   ]
 }

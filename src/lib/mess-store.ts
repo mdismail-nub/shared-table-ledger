@@ -1,5 +1,6 @@
 import type { Tone } from "@/components/app/ui";
 import type { Member, Meal, Expense, Payment, Mess, Summary, NotificationItem } from "./data";
+import { MEMBER_SESSION_KEY } from "./data";
 import { mealRate } from "./accounting";
 
 export type AdminAccount = {
@@ -109,8 +110,8 @@ export function setAdminSession(session: AdminSession) {
   safeSet(ADMIN_SESSION_KEY, JSON.stringify(session));
   if (typeof window !== "undefined") {
     try {
-      localStorage.removeItem("mess_member_session");
-      sessionStorage.removeItem("mess_member_session");
+      localStorage.removeItem(MEMBER_SESSION_KEY);
+      sessionStorage.removeItem(MEMBER_SESSION_KEY);
     } catch {
       // ignore
     }
@@ -119,6 +120,13 @@ export function setAdminSession(session: AdminSession) {
 
 export function clearAdminSession() {
   safeRemove(ADMIN_SESSION_KEY);
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export function getStoredMess(messId: string): MessRecord | null {
@@ -145,14 +153,8 @@ export function saveStoredMess(messId: string, record: MessRecord) {
     safeSet(MESS_INDEX_KEY, JSON.stringify(index));
   }
 
-  // Also sync to cloud and server in background
+  // Also sync to server in background
   if (typeof window !== "undefined") {
-    import("./cloud-sync")
-      .then(({ publishMessToCloud }) => {
-        publishMessToCloud(record).catch(() => {});
-      })
-      .catch(() => {});
-
     import("./mess.functions")
       .then(({ syncMessToServerFn }) => {
         syncMessToServerFn({ data: { record } }).catch(() => {});
@@ -402,8 +404,11 @@ function ensureDefaultSeedData() {
   });
 }
 
-// Automatically ensure seed data on load
-if (typeof window !== "undefined") {
+// In development / test environments only, ensure test fixture baseline
+if (
+  typeof window !== "undefined" &&
+  (process.env["NODE_ENV"] === "development" || process.env["TEST"] === "true")
+) {
   ensureDefaultSeedData();
 }
 
@@ -496,14 +501,6 @@ export async function signUpAdmin(params: {
 
   saveStoredMess(messId, newRecord);
 
-  // Sync to cloud and server immediately so members joining on other devices find it instantly
-  try {
-    const { publishMessToCloud } = await import("./cloud-sync");
-    await publishMessToCloud(newRecord);
-  } catch (err) {
-    console.warn("Failed to publish new mess to cloud:", err);
-  }
-
   try {
     const { syncMessToServerFn } = await import("./mess.functions");
     await syncMessToServerFn({ data: { record: newRecord } });
@@ -536,7 +533,9 @@ export async function signInAdmin(params: {
   if (!email) throw new Error("Please enter your email.");
   if (!params.password) throw new Error("Please enter your password.");
 
-  ensureDefaultSeedData();
+  if (process.env["NODE_ENV"] === "development" || process.env["TEST"] === "true") {
+    ensureDefaultSeedData();
+  }
   const accounts = getStoredAccounts();
   const account = accounts.find((a) => a.email === email);
   if (!account) {
@@ -546,18 +545,12 @@ export async function signInAdmin(params: {
   }
 
   const hash = await hashPassword(params.password);
-  if (hash !== account.passwordHash && params.password !== "password123") {
+  if (hash !== account.passwordHash) {
     throw new Error("Incorrect password. Please try again.");
   }
 
   const existingRecord = getStoredMess(account.messId);
   if (existingRecord) {
-    import("./cloud-sync")
-      .then(({ publishMessToCloud }) => {
-        publishMessToCloud(existingRecord).catch(() => {});
-      })
-      .catch(() => {});
-
     import("./mess.functions")
       .then(({ syncMessToServerFn }) => {
         syncMessToServerFn({ data: { record: existingRecord } }).catch(() => {});
