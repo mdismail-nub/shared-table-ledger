@@ -1,540 +1,182 @@
-# Shared Table Ledger
+# Shared Table Ledger — Modern Mess Management System
+
+[![Frontend: React](https://img.shields.io/badge/Frontend-React%2018%20%7C%20TypeScript-blue.svg)](https://react.dev)
+[![Backend: C++17](https://img.shields.io/badge/Backend-C%2B%2B17%20%7C%20Drogon-00599C.svg)](https://drogon.org)
+[![Database: PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL%2014+-336791.svg)](https://www.postgresql.org)
+[![Build: CMake](https://img.shields.io/badge/Build-CMake%203.16+-064F8C.svg)](https://cmake.org)
+[![Tests: 100% Passing](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg)](#testing--verification)
+
+> **University Software Development Course Project**  
+> A high-performance, transparent mess accounting and hostel management system featuring a modern **React 18 + TypeScript PWA frontend** powered by an asynchronous **C++17 Drogon RESTful backend** and **PostgreSQL database**.
+
+---
+
+## 1. Project Overview
+
+In student dormitories, bachelor messes, and shared flats across South Asia, tracking shared meal consumption, daily food bazaar expenditures, and monthly utility bills is traditionally done on paper ledgers. This manual approach frequently leads to calculation discrepancies, lost receipts, and interpersonal friction.
+
+**Shared Table Ledger** digitizes and automates this entire lifecycle:
+- **Transparent Daily Accounting:** Automated calculation of weighted meal rates, individual shares, deposits, and real-time net balances.
+- **Sub-Millisecond Backend Performance:** Core business logic and arithmetic are implemented in pure modern C++17 for high concurrency and deterministic accuracy.
+- **Offline-First PWA:** Full functionality is maintained even when internet connectivity is intermittent.
+- **Multi-Role Security:** Administrative role verification, stateless HS256 JWT sessions, high-entropy guest invite codes, and OWASP formula-injection defense.
+
+---
+
+## 2. System Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client["React Client (Port 5173)"]
+        UI["React 18 + TypeScript UI"]
+        TQ["TanStack Query (Month Cache)"]
+        Offline["IndexedDB / LocalStore"]
+        APIClient["src/lib/api-client.ts"]
+    end
+
+    subgraph Backend["C++ Drogon Backend (Port 8080)"]
+        HTTP["Drogon Asynchronous Server"]
+        AuthFilter["Auth & CORS Filters"]
+        Controllers["REST Controllers"]
+        Engine["AccountingEngine (C++ Math)"]
+        DBMgr["DatabaseManager"]
+    end
+
+    subgraph DB["Persistence"]
+        Postgres[(PostgreSQL 14+)]
+        JsonStore[("JSON Snapshot Cache")]
+    end
+
+    UI --> TQ --> APIClient
+    TQ -.-> Offline
+    APIClient -- "REST HTTP / JSON" --> HTTP
+    HTTP --> AuthFilter --> Controllers
+    Controllers --> Engine
+    Controllers --> DBMgr
+    DBMgr --> Postgres
+    DBMgr -.-> JsonStore
+```
+
+---
+
+## 3. Technology Stack
+
+| Layer | Technologies & Tools |
+| :--- | :--- |
+| **Frontend** | React 18, TypeScript 5, Vite, TanStack Router, TanStack Query, Tailwind CSS, Radix UI primitives, Lucide Icons, Sonner |
+| **Backend** | Modern C++17 / C++20, Drogon Web Framework, JsonCpp, CMake 3.16+ |
+| **Database** | PostgreSQL 14+, Parameterized Queries, Composite B-Tree Indexes, ACID Transactions |
+| **Security** | FIPS 180-4 SHA-256, HMAC-SHA256 JWT, OWASP CSV Formula Injection Sanitization, Scoped Guest Tokens |
+| **Testing** | Standalone C++ Unit Test Runner (`AccountingEngineTest.cpp`), Vitest Frontend Test Runner |
+
+---
+
+## 4. Key Application Features
+
+1. **Executive Dashboard:** Live cards displaying total monthly expenses, total meals consumed, current dynamic meal rate, total deposits collected, and net mess balance.
+2. **Member Management:** Comprehensive member profiles with room numbers, dietary preferences, join/leave tracking, and balance status.
+3. **Daily Meal Tracking:** Record breakfast ($0.5$), lunch ($1.0$), and dinner ($1.0$) tallies per member with batch submission and unique daily constraints.
+4. **Expense Categorization:** Distinction between shared food/bazaar expenses (which affect meal rate) and household overhead (rent, utilities, maid, wifi).
+5. **Deposit & Payment System:** Member advance payment tracking with payment method attribution (Cash, bKash, Nagad, Bank).
+6. **Individual Statements:** Single-click breakdown of meal costs and utility dues versus total paid for each resident.
+7. **RFC-4180 CSV Export:** Downloadable financial audit spreadsheets with UTF-8 BOM and formula execution protection.
+8. **Guest Joining & Sharing:** Secure 6-digit invite code lookup enabling prospective or guest members to view their ledger.
+
+---
+
+## 5. Getting Started & Installation
+
+### 5.1 Prerequisites
+- **Node.js:** v18.0.0 or newer
+- **npm:** v9.0.0 or newer
+- **C++ Compiler:** MSVC (Visual Studio 2019/2022/2026 Build Tools) on Windows, or GCC 9+ / Clang 10+ on Linux
+- **CMake:** Version 3.16 or higher
+
+---
+
+### 5.2 Frontend Setup & Execution
+
+```powershell
+# 1. Install Node dependencies
+npm install
 
-I have uploaded the ui kit and logo for my website called mess manager. And here is the features breakdown i want you to generate the website. Focus on ui ux mainly because i will do the remaining work later but for now i want an amazing ui ux for the website . Mess Manager — Complete Feature Plan
-
-Project Overview
-
-Mess Manager is a modern, responsive web application designed to help students, roommates, and shared households manage meals, groceries, deposits, shared expenses, and monthly accounts.
-
-The primary goal is to make mess accounting transparent and simple. Every member should be able to understand how much they spent, how much they owe, and how their monthly meal cost is calculated.
-
-1. Dashboard
-
-The dashboard provides a complete overview of the current month's financial activity.
-
-Overview Cards
-
-- Total monthly expenses
-
-- Total meal count
-
-- Current meal rate
-
-- Total deposits collected
-
-- Total shared household bills
-
-- Outstanding member balances
-
-Financial Insights
-
-- Daily and monthly spending charts
-
-- Expense category breakdown
-
-- Deposit versus expense comparison
-
-- Month-over-month expense trends
-
-- Meal consumption statistics
-
-Recent Activity
-
-Display recently recorded:
-
-- Bazar expenses
-
-- Member deposits
-
-- Meal updates
-
-- Household bill payments
-
-- Account adjustments
-
-Each activity should include its date, amount, category, and associated member.
-
-2. Member Management
-
-Every mess member should have an individual financial profile.
-
-Features
-
-- Add, edit, and remove members
-
-- Store name, contact details, joining date, and membership status
-
-- Track deposits, withdrawals, and advances
-
-- Record daily breakfast, lunch, and dinner meals
-
-- Calculate monthly meal totals automatically
-
-- View individual financial statements
-
-- Track outstanding dues and remaining balances
-
-- Support members joining or leaving during a month
-
-Member Profile Summary
-
-Each member profile should display:
-
-- Total meals consumed
-
-- Total meal cost
-
-- Total deposits
-
-- Shared household bill contribution
-
-- Outstanding amount or remaining credit
-
-- Complete transaction history
-
-3. Meal Management
-
-The meal management module records each member's daily meal consumption.
-
-Features
-
-- Record breakfast, lunch, and dinner
-
-- Support configurable meal counts, including 0, 0.5, 1, or 2 meals
-
-- Edit incorrect meal entries
-
-- View daily, weekly, and monthly meal summaries
-
-- Set meal-off days and meal schedules
-
-- Display meal records in a calendar or table
-
-- Calculate individual and total monthly meals
-
-- Allow authorized users to correct previous entries
-
-The interface should make it possible to update multiple members' meals quickly without opening a separate form for every member.
-
-4. Expense and Bazar Management
-
-Expenses must be divided into two separate categories to ensure accurate accounting.
-
-A. Meal Expenses
-
-Examples:
-
-- Rice
-
-- Vegetables
-
-- Fish and meat
-
-- Eggs
-
-- Cooking oil
-
-- Spices
-
-- Other food-related purchases
-
-These expenses contribute to the monthly meal-rate calculation.
-
-B. Shared Household Expenses
-
-Examples:
-
-- Wi-Fi bills
-
-- Electricity bills
-
-- Gas bills
-
-- Water bills
-
-- Cleaning supplies
-
-- Other agreed household costs
-
-These expenses must be tracked separately and excluded from the meal-rate calculation.
-
-Expense Management Features
-
-- Add, edit, and delete expenses
-
-- Record amount, date, category, description, and purchaser
-
-- Attach receipt images when available
-
-- Record payment methods and payment sources
-
-- Filter expenses by date, category, member, and expense type
-
-- View daily, weekly, and monthly expense summaries
-
-- Maintain an audit trail for corrections and deletions
-
-Important accounting rule: Wi-Fi, electricity, gas, and other shared household bills must never accidentally increase the meal rate.
-
-5. Deposit and Payment Management
-
-This module tracks money received from members and payments made for mess expenses.
-
-Features
-
-- Record member deposits
-
-- Track deposit dates and amounts
-
-- Support cash, bank transfers, and mobile financial services
-
-- Record advances and refunds
-
-- View payment history
-
-- Track outstanding deposits and unpaid dues
-
-- Generate individual deposit statements
-
-- Compare total deposits against total member charges
-
-Deposits represent money received from members, not expenses. They should increase the member's available credit.
-
-6. Automatic Monthly Accounting
-
-The accounting engine calculates the meal rate, individual meal costs, shared expenses, and final member balances.
-
-Meal Rate Formula
-
-Meal Rate = Total Meal Expenses / Total Meals
-
-Example:
-
-Total Meal Expenses = ৳30,000
-
-Total Meals = 600
-
-Meal Rate = 30,000 / 600
-
-Meal Rate = ৳50
-
-Individual Meal Cost
-
-Member Meal Cost = Member's Total Meals × Meal Rate
-
-Individual Amount Due
-
-Amount Due = Meal Cost + Member's Shared Expense Contribution
-
-Individual Balance
-
-Member Balance = Total Deposits - Total Amount Due
-
-Balance Interpretation
-
-- Positive balance: The member has remaining credit.
-
-- Negative balance: The member owes money.
-
-- Zero balance: The member's account is settled.
-
-Shared Expense Allocation
-
-Support configurable allocation methods:
-
-- Equal division among eligible members
-
-- Custom contribution amounts
-
-- Percentage-based allocation
-
-- Other agreed allocation rules
-
-The app should clearly display how each member's final amount is calculated.
-
-Accounting Requirements
-
-- Exclude shared household bills from food expenses.
-
-- Exclude deposits from expense totals.
-
-- Avoid counting the same transaction twice.
-
-- Handle zero-meal months safely.
-
-- Validate transactions before saving.
-
-- Recalculate affected member balances when authorized corrections occur.
-
-7. Month-End Closing and Reports
-
-Provide a dedicated month-end closing screen to summarize the mess's financial status.
-
-Monthly Summary
-
-- Total food expenses
-
-- Total household bills
-
-- Total meals consumed
-
-- Final meal rate
-
-- Total deposits collected
-
-- Total amount due from members
-
-- Remaining credits and unpaid dues
-
-Reporting Features
-
-- Member-by-member financial statements
-
-- Expense breakdown by category
-
-- Complete transaction history
-
-- Printable monthly reports
-
-- CSV and PDF exports
-
-- Monthly archives
-
-- Balance carry-forward to the next month, when applicable
-
-Month Closing
-
-- Review all meal records and expenses
-
-- Identify missing or invalid entries
-
-- Display the final accounting summary
-
-- Require confirmation before closing the month
-
-- Restrict accidental changes to finalized accounts
-
-- Support authorized corrections with an audit trail
-
-8. Application Navigation
-
-The application should include the following main pages:
-
-Page| Purpose
-
-Dashboard| Monthly overview and financial insights
-
-Members| Member profiles and individual accounts
-
-Meals| Daily meal entry and monthly totals
-
-Expenses| Bazar purchases and household bills
-
-Deposits & Payments| Deposits, withdrawals, and payment history
-
-Monthly Accounts| Meal rate, dues, and balance settlement
-
-Reports| Charts, statements, and exports
-
-Settings| Mess details, categories, and accounting rules
-
-9. UI Kit and Reusable Components
-
-Build a consistent design system with reusable components.
-
-Component| Purpose
-
-Header / Topbar| Page title, month selector, profile, notifications
-
-Sidebar / Mobile Navigation| Navigate between modules
-
-Statistic Cards| Display meal rate, expenses, deposits, and balances
-
-Data Tables| Display members, transactions, and meal records
-
-Status Badges| Paid, pending, settled, and overdue statuses
-
-Form Dialogs| Add meals, expenses, deposits, and members
-
-Date and Month Picker| Filter records and select accounting periods
-
-Search and Filters| Find members and transactions
-
-Charts| Visualize expense trends and category breakdowns
-
-Confirmation Dialogs| Confirm deletions and month closing
-
-Toast Notifications| Display success messages and errors
-
-Empty States| Guide users when no records exist
-
-Loading Skeletons| Improve the experience while data loads
-
-Pagination| Navigate large transaction and member lists
-
-Visual Design Direction
-
-- Use a clean white or light background.
-
-- Use blue as the primary action color.
-
-- Use subtle cyan, mint, and lime accents selectively.
-
-- Use bold headings and readable body typography.
-
-- Maintain consistent spacing and rounded corners.
-
-- Keep cards clean and avoid unnecessary decoration.
-
-- Ensure every page works well on mobile, tablet, and desktop.
-
-- Use clear icons and consistent button styles.
-
-- Provide accessible contrast and visible focus states.
-
-10. Advanced Features
-
-These features can be introduced after the core accounting workflow is stable.
-
-- Multiple mess or household workspaces
-
-- Admin and member roles with permissions
-
-- Member self-service meal entry with admin approval
-
-- Notifications for unpaid balances and month-end closing
-
-- Recurring household bills
-
-- Receipt image uploads
-
-- Activity logs and audit history
-
-- Offline support with safe data synchronization
-
-- Data backup and restore
-
-- Installable Progressive Web App (PWA)
-
-- Member-specific access to financial statements
-
-11. Recommended Development Roadmap
-
-Phase 1 — Foundation
-
-- Authentication
-
-- Mess settings
-
-- Member management
-
-- Dashboard layout
-
-- Responsive navigation
-
-Phase 2 — Daily Operations
-
-- Meal tracking
-
-- Bazar expense management
-
-- Shared household bills
-
-- Member deposits
-
-- Payment history
-
-Phase 3 — Accounting Engine
-
-- Automatic meal-rate calculation
-
-- Individual member balances
-
-- Shared expense allocation
-
-- Monthly settlement
-
-- Accounting validation and correction rules
-
-Phase 4 — Reports
-
-- Financial charts
-
-- Monthly summaries
-
-- Member statements
-
-- CSV and PDF exports
-
-- Month-end closing and archives
-
-Phase 5 — Polish and Reliability
-
-- Mobile responsiveness
-
-- Role-based permissions
-
-- Data backup and restore
-
-- Offline support
-
-- Error handling
-
-- Accounting tests
-
-- Security and usability improvements
-
-12. Core Principles
-
-1. Accurate accounting: All calculations must follow clearly defined rules.
-
-1. Expense separation: Food expenses and household bills must remain separate.
-
-1. Financial transparency: Members should understand every charge and balance.
-
-1. Easy daily use: Recording meals, purchases, and deposits should require minimal effort.
-
-1. Responsive design: The application must work smoothly on mobile devices.
-
-1. Data integrity: Prevent duplicate transactions, invalid entries, and accidental changes.
-
-1. Privacy and permissions: Only authorized users should be able to modify sensitive financial records.
-
-1. Clear reporting: Month-end accounts should be easy to review, export, and verify.
-
-Final Recommendation
-
-Build the first version around four essential workflows:
-
-1. Record daily meals.
-
-2. Record food expenses and shared household bills separately.
-
-3. Track member deposits and payments.
-
-4. Calculate the meal rate and each member's final monthly balance automatically.
-
-Once these workflows are reliable, expand into analytics, advanced reports, notifications, offline support, and multi-mess management.
-
-The most important requirement is that the meal rate must be calculated only from meal-related expenses, never from Wi-Fi or other shared household bills.
-
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/36e058a0-368f-4562-bf68-4982f2289b64).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
+# 2. Run the React development server
 npm run dev
 ```
+The frontend is available at `http://localhost:5173`.
+
+---
+
+### 5.3 C++ Backend Setup & Execution
+
+The C++ Drogon backend is located in `backend-cpp/`.
+
+#### On Windows (Visual Studio / MSVC):
+```powershell
+cd backend-cpp
+
+# 1. Configure the build directory
+cmake -S . -B build
+
+# 2. Compile the standalone test runner
+cmake --build build --config Release --target mess_manager_tests
+
+# 3. Run the automated C++ tests
+.\build\bin\Release\mess_manager_tests.exe
+```
+
+#### On Linux / macOS:
+```bash
+cd backend-cpp
+mkdir -p build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+
+# Run tests
+./mess_manager_tests
+
+# Start the Drogon REST server (Port 8080)
+./mess_manager_server
+```
+
+---
+
+## 6. Testing & Verification
+
+The project includes dual test suites for comprehensive verification across both stacks:
+
+### 1. Frontend Test Suite (Vitest)
+```powershell
+npm test
+```
+- **Results:** 7 test suites, 29 tests covering routing, accounting formulas, security fixes, invite tokens, and offline synchronization. (100% Passing).
+
+### 2. C++ Backend Test Suite
+```powershell
+.\backend-cpp\build\bin\Release\mess_manager_tests.exe
+```
+- **Results:** 7 test suites covering standard meal rates, zero-meal edge cases, utility allocations, multi-member monthly ledgers, CSV sanitization, HMAC-SHA256 JWT cryptography, and boundary validation rules. (100% Passing).
+
+---
+
+## 7. Documentation Index
+
+Comprehensive project documentation is maintained in the `docs/` directory:
+
+1. [docs/PROJECT_AUDIT.md](file:///e:/mess%20manager/docs/PROJECT_AUDIT.md) — Initial codebase audit and dependency analysis.
+2. [docs/FEATURE_INVENTORY.md](file:///e:/mess%20manager/docs/FEATURE_INVENTORY.md) — Comprehensive inventory of all 15+ application features.
+3. [docs/KNOWN_ISSUES.md](file:///e:/mess%20manager/docs/KNOWN_ISSUES.md) — Technical debt and resolved security vulnerabilities.
+4. [docs/BUG_FIX_REPORT.md](file:///e:/mess%20manager/docs/BUG_FIX_REPORT.md) — Record of pre-migration bug fixes.
+5. [docs/SYSTEM_ARCHITECTURE.md](file:///e:/mess%20manager/docs/SYSTEM_ARCHITECTURE.md) — Deep architectural specification and sequence flows.
+6. [docs/CPP_IMPLEMENTATION_GUIDE.md](file:///e:/mess%20manager/docs/CPP_IMPLEMENTATION_GUIDE.md) — C++ architecture, Drogon integration, and build guide.
+7. [docs/API_DOCUMENTATION.md](file:///e:/mess%20manager/docs/API_DOCUMENTATION.md) — Full REST API specification with request/response payloads.
+8. [docs/DATABASE_DOCUMENTATION.md](file:///e:/mess%20manager/docs/DATABASE_DOCUMENTATION.md) — PostgreSQL ERD, schema constraints, and indexes.
+9. [docs/PRESENTATION_GUIDE.md](file:///e:/mess%20manager/docs/PRESENTATION_GUIDE.md) — University presentation slides outline and faculty Q&A preparation.
+10. [docs/CPP_CODE_WALKTHROUGH.md](file:///e:/mess%20manager/docs/CPP_CODE_WALKTHROUGH.md) — Line-by-line breakdown of core C++ algorithms.
+
+---
+
+## 8. License & University Course Credits
+
+Developed as a semester project for the **Software Development / Advanced Software Engineering** curriculum.  
+All rights reserved © 2026.

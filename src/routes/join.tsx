@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { pageMeta } from "@/lib/meta";
 import { parseInviteFromUrl, createMessInviteLink, type InvitePayload } from "@/lib/invite";
+import { cppApi } from "@/lib/api-client";
 import {
   getStoredMess,
   saveStoredMess,
@@ -241,48 +242,71 @@ function JoinMessPage() {
     const clean = code.trim().replace(/\D/g, "").slice(0, 6);
     if (clean.length !== 6) return;
 
-    // 1. Try server function
-    import("@/lib/mess.functions")
-      .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: clean } }))
-      .then((sRes) => {
-        if (sRes) {
+    // 1. Try C++ Drogon REST Backend preview
+    cppApi.workspace.previewMess(clean)
+      .then((cppRes) => {
+        if (cppRes.data && !cppRes.error) {
           setInviteData({
-            id: sRes.id,
-            name: sRes.name,
-            manager: sRes.manager,
+            id: cppRes.data.id,
+            name: cppRes.data.name,
+            manager: cppRes.data.manager,
             code: clean,
-            currency: sRes.currency,
-            memberCount: sRes.members?.filter((m) => m.status !== "left").length,
+            currency: cppRes.data.currency,
+            memberCount: cppRes.data.members?.filter((m) => m.status !== "left").length,
             timestamp: Date.now(),
           });
-          if (sRes.members && sRes.members.length > 0) {
-            setMembersList(sRes.members as Member[]);
+          if (cppRes.data.members && cppRes.data.members.length > 0) {
+            setMembersList(cppRes.data.members);
           }
-          toast.success(`Mess found: ${sRes.name}`);
+          toast.success(`Mess found: ${cppRes.data.name}`);
           return;
         }
-        throw new Error("Not found on server");
+        throw new Error("C++ backend returned no data");
       })
       .catch(() => {
-        // 2. Check local
-        const local = findMessByInviteCode(clean);
-        if (local) {
-          setInviteData({
-            id: local.mess.id,
-            name: local.mess.name,
-            manager: local.mess.manager,
-            code: clean,
-            currency: local.mess.currency,
-            memberCount: local.members?.filter((m) => m.status !== "left").length,
-            timestamp: Date.now(),
+        // Fallback to server function
+        import("@/lib/mess.functions")
+          .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: clean } }))
+          .then((sRes) => {
+            if (sRes) {
+              setInviteData({
+                id: sRes.id,
+                name: sRes.name,
+                manager: sRes.manager,
+                code: clean,
+                currency: sRes.currency,
+                memberCount: sRes.members?.filter((m) => m.status !== "left").length,
+                timestamp: Date.now(),
+              });
+              if (sRes.members && sRes.members.length > 0) {
+                setMembersList(sRes.members as Member[]);
+              }
+              toast.success(`Mess found: ${sRes.name}`);
+              return;
+            }
+            throw new Error("Not found on server");
+          })
+          .catch(() => {
+            // 2. Check local
+            const local = findMessByInviteCode(clean);
+            if (local) {
+              setInviteData({
+                id: local.mess.id,
+                name: local.mess.name,
+                manager: local.mess.manager,
+                code: clean,
+                currency: local.mess.currency,
+                memberCount: local.members?.filter((m) => m.status !== "left").length,
+                timestamp: Date.now(),
+              });
+              if (local.members && local.members.length > 0) {
+                setMembersList(local.members);
+              }
+              toast.success(`Mess found: ${local.mess.name}`);
+            } else {
+              toast.error("Mess not found for this 6-digit code. Please check with your mess admin.");
+            }
           });
-          if (local.members && local.members.length > 0) {
-            setMembersList(local.members);
-          }
-          toast.success(`Mess found: ${local.mess.name}`);
-        } else {
-          toast.error("Mess not found for this 6-digit code. Please check with your mess admin.");
-        }
       });
   };
 
@@ -467,16 +491,31 @@ function JoinMessPage() {
       }
 
       let guestToken: string | undefined;
+      // 1. Try C++ Drogon REST Backend
       try {
-        const { createGuestSessionFn } = await import("@/lib/mess.functions");
-        const sessionRes = await createGuestSessionFn({
-          data: { code: inviteData.code, memberId: memberIdToUse },
+        const cppSession = await cppApi.auth.createGuestSession({
+          code: inviteData.code,
+          memberId: memberIdToUse,
         });
-        if (sessionRes?.token) {
-          guestToken = sessionRes.token;
+        if (cppSession.data?.token) {
+          guestToken = cppSession.data.token;
         }
       } catch {
-        // non-fatal in offline mode
+        // Fall back to server function
+      }
+
+      if (!guestToken) {
+        try {
+          const { createGuestSessionFn } = await import("@/lib/mess.functions");
+          const sessionRes = await createGuestSessionFn({
+            data: { code: inviteData.code, memberId: memberIdToUse },
+          });
+          if (sessionRes?.token) {
+            guestToken = sessionRes.token;
+          }
+        } catch {
+          // non-fatal in offline mode
+        }
       }
 
       // Save member directly to server

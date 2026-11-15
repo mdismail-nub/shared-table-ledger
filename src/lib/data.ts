@@ -82,6 +82,7 @@ export type Mess = {
   show_invite_to_members: boolean;
   meal_categories: string[];
   household_categories: string[];
+  invite_code?: string | undefined;
 };
 
 export type Summary = {

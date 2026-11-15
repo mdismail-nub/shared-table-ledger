@@ -26,6 +26,17 @@ dist-ssr
 
 # Local storage data
 .data/
+backend-cpp/data/*.json
+
+# C++ Build artifacts
+backend-cpp/build/
+backend-cpp/bin/
+backend-cpp/lib/
+*.obj
+*.ilk
+*.pdb
+*.idb
+*.exe
 
 # Editor directories and files
 .vscode/*

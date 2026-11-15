@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAdminSession, getMessDataById, getMessDataByCode, saveStoredMess } from "./mess-store";
 import { loadWorkspaceByCodeFn, loadWorkspaceByIdFn } from "./mess.functions";
 import { cacheWorkspaceToIndexedDB, getCachedWorkspaceFromIndexedDB } from "./offline-db";
+import { cppApi } from "./api-client";
 
 export interface WorkspacePayload {
   mess: Mess;
@@ -39,6 +40,21 @@ export const workspaceOptions = (month = currentMonth()) =>
     queryFn: async (): Promise<WorkspacePayload> => {
       const memberSession = getMemberSession();
       if (memberSession?.code) {
+        // 1. Primary: C++ Drogon REST Backend
+        try {
+          const cppRes = await cppApi.workspace.getWorkspaceByCode(
+            memberSession.code,
+            month,
+            memberSession.token,
+          );
+          if (cppRes.data && !cppRes.error) {
+            cacheWorkspaceToIndexedDB(cppRes.data.mess.id, month, cppRes.data).catch(() => {});
+            return cppRes.data;
+          }
+        } catch {
+          // Fall through to server function
+        }
+
         try {
           const sRes = await loadWorkspaceByCodeFn({
             data: {
@@ -196,6 +212,17 @@ export const workspaceOptions = (month = currentMonth()) =>
 
       const adminSession = getAdminSession();
       if (adminSession) {
+        // 1. Primary: C++ Drogon REST Backend
+        try {
+          const cppRes = await cppApi.workspace.getWorkspace(month);
+          if (cppRes.data && !cppRes.error) {
+            cacheWorkspaceToIndexedDB(adminSession.messId, month, cppRes.data).catch(() => {});
+            return cppRes.data;
+          }
+        } catch {
+          // Fall through to server function
+        }
+
         try {
           const sRes = await loadWorkspaceByIdFn({
             data: { messId: adminSession.messId, month, token: adminSession.token },

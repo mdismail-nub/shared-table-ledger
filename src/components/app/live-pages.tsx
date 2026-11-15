@@ -286,6 +286,7 @@ function NoticeBoard() {
 export function DashboardPage() {
   const w = useWorkspace();
   const nav = useNavigate();
+  const invite = useInviteCode();
 
   return (
     <div className="space-y-6 sm:space-y-8 min-w-0">
@@ -341,7 +342,7 @@ export function DashboardPage() {
                     id: w.mess?.id || "",
                     name: w.mess?.name || "",
                     manager: w.mess?.manager || "",
-                    code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
+                    code: invite.data || (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
                     memberCount: w.members.filter((m) => m.status !== "left").length,
                     members: w.members,
@@ -362,7 +363,7 @@ export function DashboardPage() {
                     id: w.mess?.id || "",
                     name: w.mess?.name || "",
                     manager: w.mess?.manager || "",
-                    code: (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
+                    code: invite.data || (w.mess as unknown as { invite_code?: string })?.invite_code || "123456",
                     currency: w.mess?.currency,
                     memberCount: w.members.filter((m) => m.status !== "left").length,
                     members: w.members,

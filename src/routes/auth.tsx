@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { pageMeta } from "@/lib/meta";
-import { signInAdmin, signUpAdmin, getAdminSession } from "@/lib/mess-store";
+import { signInAdmin, signUpAdmin, getAdminSession, setAdminSession } from "@/lib/mess-store";
+import { cppApi } from "@/lib/api-client";
 import { createMessInviteLink } from "@/lib/invite";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -41,6 +42,32 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
+      // 1. Try C++ Drogon REST Backend
+      try {
+        const cppRes = await cppApi.auth.login({ email, password });
+        if (cppRes.data && !cppRes.error) {
+          setAdminSession({
+            userId: cppRes.data.userId,
+            email: cppRes.data.email,
+            name: cppRes.data.name,
+            messId: cppRes.data.messId,
+            token: cppRes.data.token,
+            inviteCode: cppRes.data.inviteCode,
+            createdAt: cppRes.data.createdAt || new Date().toISOString(),
+          });
+          await qc.invalidateQueries();
+          toast.success(`Welcome back, ${cppRes.data.name}!`);
+          navigate({ to: "/dashboard", replace: true });
+          return;
+        } else if (cppRes.error && !cppRes.error.toLowerCase().includes("failed to connect")) {
+          toast.error(cppRes.error);
+          setBusy(false);
+          return;
+        }
+      } catch {
+        // Fall back only on connection failure
+      }
+
       const session = await signInAdmin({ email, password });
       await qc.invalidateQueries();
       toast.success(`Welcome back, ${session.name}!`);
@@ -55,6 +82,41 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
+      // 1. Try C++ Drogon REST Backend
+      try {
+        const cppRes = await cppApi.auth.register({
+          email,
+          password,
+          name,
+          messName,
+          currency,
+        });
+        if (cppRes.data && !cppRes.error) {
+          const loginRes = await cppApi.auth.login({ email, password });
+          if (loginRes.data && !loginRes.error) {
+            setAdminSession({
+              userId: loginRes.data.userId,
+              email: loginRes.data.email,
+              name: loginRes.data.name,
+              messId: loginRes.data.messId,
+              token: loginRes.data.token,
+              inviteCode: loginRes.data.inviteCode,
+              createdAt: loginRes.data.createdAt || new Date().toISOString(),
+            });
+            await qc.invalidateQueries();
+            toast.success(`Admin account created for ${loginRes.data.name}! 🎉`);
+            navigate({ to: "/dashboard", replace: true });
+            return;
+          }
+        } else if (cppRes.error && !cppRes.error.toLowerCase().includes("failed to connect")) {
+          toast.error(cppRes.error);
+          setBusy(false);
+          return;
+        }
+      } catch {
+        // Fall back to local store
+      }
+
       const session = await signUpAdmin({
         email,
         password,
