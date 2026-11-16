@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include <algorithm>
+#include <exception>
 
 #include <json/json.h>
 #include <drogon/drogon.h>
@@ -18,7 +19,7 @@
 #include "middleware/CorsFilter.h"
 
 namespace mess_manager {
-extern services::AuthService *g_authService;
+    extern services::AuthService *g_authService;
 }
 
 namespace {
@@ -52,6 +53,7 @@ std::string trim(const std::string &value) {
     }
 
     const auto last = value.find_last_not_of(" \t\r\n");
+
     return value.substr(first, last - first + 1);
 }
 
@@ -59,7 +61,10 @@ void loadConfigFile(AppConfig &config, const std::string &path) {
     std::ifstream file(path);
 
     if (!file.is_open()) {
-        std::cout << "[Config] Config file not found. Using defaults and environment variables.\n";
+        std::cout
+            << "[Config] Config file not found. "
+            << "Using defaults and environment variables.\n";
+
         return;
     }
 
@@ -68,37 +73,55 @@ void loadConfigFile(AppConfig &config, const std::string &path) {
     std::string errors;
 
     if (!Json::parseFromStream(reader, file, &root, &errors)) {
-        std::cerr << "[Config] Failed to parse config file: " << errors << "\n";
+        std::cerr << "[Config] Failed to parse config file: "
+                  << errors << "\n";
+
         return;
     }
 
     if (root.isMember("server") && root["server"].isObject()) {
         const auto &server = root["server"];
 
-        if (server["host"].isString())
+        if (server["host"].isString()) {
             config.host = server["host"].asString();
+        }
 
-        if (server["port"].isUInt())
-            config.port = static_cast<uint16_t>(server["port"].asUInt());
+        if (server["port"].isUInt()) {
+            const unsigned int port = server["port"].asUInt();
 
-        if (server["threads"].isUInt())
-            config.threads = server["threads"].asUInt();
+            if (port > 0 && port <= 65535) {
+                config.port = static_cast<uint16_t>(port);
+            }
+        }
 
-        if (server["jwt_secret"].isString())
+        if (server["threads"].isUInt()) {
+            const unsigned int threads = server["threads"].asUInt();
+
+            if (threads > 0) {
+                config.threads = threads;
+            }
+        }
+
+        if (server["jwt_secret"].isString()) {
             config.jwtSecret = server["jwt_secret"].asString();
+        }
 
-        if (server["log_level"].isString())
+        if (server["log_level"].isString()) {
             config.logLevel = server["log_level"].asString();
+        }
     }
 
     if (root.isMember("database") && root["database"].isObject()) {
         const auto &database = root["database"];
 
-        if (database["postgres_url"].isString())
+        if (database["postgres_url"].isString()) {
             config.postgresUrl = database["postgres_url"].asString();
+        }
 
-        if (database["fallback_data_file"].isString())
-            config.fallbackDataPath = database["fallback_data_file"].asString();
+        if (database["fallback_data_file"].isString()) {
+            config.fallbackDataPath =
+                database["fallback_data_file"].asString();
+        }
     }
 
     if (root.isMember("cors") &&
@@ -109,7 +132,7 @@ void loadConfigFile(AppConfig &config, const std::string &path) {
 
         for (const auto &origin : root["cors"]["allow_origins"]) {
             if (origin.isString()) {
-                const auto value = trim(origin.asString());
+                const std::string value = trim(origin.asString());
 
                 if (!value.empty()) {
                     config.allowedOrigins.push_back(value);
@@ -117,57 +140,65 @@ void loadConfigFile(AppConfig &config, const std::string &path) {
             }
         }
     }
+
+    std::cout << "[Config] Loaded configuration from "
+              << path << "\n";
 }
 
 void loadEnvironment(AppConfig &config) {
-    auto getEnv = [](const char *name) -> const char * {
-        return std::getenv(name);
-    };
-
-    if (const char *value = getEnv("APP_ENV"))
+    if (const char *value = std::getenv("APP_ENV")) {
         config.appEnv = value;
-
-    if (const char *value = getEnv("PORT")) {
-        const int port = std::atoi(value);
-
-        if (port > 0 && port <= 65535)
-            config.port = static_cast<uint16_t>(port);
-    } else if (const char *value = getEnv("APP_PORT")) {
-        const int port = std::atoi(value);
-
-        if (port > 0 && port <= 65535)
-            config.port = static_cast<uint16_t>(port);
     }
 
-    if (const char *value = getEnv("HOST"))
-        config.host = value;
-    else if (const char *value = getEnv("BIND_HOST"))
-        config.host = value;
+    if (const char *value = std::getenv("PORT")) {
+        const int port = std::atoi(value);
 
-    if (const char *value = getEnv("DATABASE_URL"))
-        config.postgresUrl = value;
-    else if (const char *value = getEnv("POSTGRES_URL"))
-        config.postgresUrl = value;
+        if (port > 0 && port <= 65535) {
+            config.port = static_cast<uint16_t>(port);
+        }
+    } else if (const char *value = std::getenv("APP_PORT")) {
+        const int port = std::atoi(value);
 
-    if (const char *value = getEnv("JWT_SECRET"))
+        if (port > 0 && port <= 65535) {
+            config.port = static_cast<uint16_t>(port);
+        }
+    }
+
+    if (const char *value = std::getenv("HOST")) {
+        config.host = value;
+    } else if (const char *value = std::getenv("BIND_HOST")) {
+        config.host = value;
+    }
+
+    if (const char *value = std::getenv("DATABASE_URL")) {
+        config.postgresUrl = value;
+    } else if (const char *value = std::getenv("POSTGRES_URL")) {
+        config.postgresUrl = value;
+    }
+
+    if (const char *value = std::getenv("JWT_SECRET")) {
         config.jwtSecret = value;
+    }
 
-    if (const char *value = getEnv("DATA_PATH"))
+    if (const char *value = std::getenv("DATA_PATH")) {
         config.fallbackDataPath = value;
-    else if (const char *value = getEnv("FALLBACK_DATA_PATH"))
+    } else if (const char *value = std::getenv("FALLBACK_DATA_PATH")) {
         config.fallbackDataPath = value;
+    }
 
-    if (const char *value = getEnv("SERVER_THREADS")) {
+    if (const char *value = std::getenv("SERVER_THREADS")) {
         const int threads = std::atoi(value);
 
-        if (threads > 0)
+        if (threads > 0) {
             config.threads = static_cast<size_t>(threads);
+        }
     }
 
-    if (const char *value = getEnv("LOG_LEVEL"))
+    if (const char *value = std::getenv("LOG_LEVEL")) {
         config.logLevel = value;
+    }
 
-    if (const char *value = getEnv("CORS_ALLOWED_ORIGINS")) {
+    if (const char *value = std::getenv("CORS_ALLOWED_ORIGINS")) {
         config.allowedOrigins.clear();
 
         std::istringstream stream(value);
@@ -180,7 +211,7 @@ void loadEnvironment(AppConfig &config) {
                 config.allowedOrigins.push_back(origin);
             }
         }
-    } else if (const char *value = getEnv("CORS_ORIGIN")) {
+    } else if (const char *value = std::getenv("CORS_ORIGIN")) {
         config.allowedOrigins = {value};
     }
 }
@@ -196,30 +227,38 @@ bool validateConfig(const AppConfig &config) {
     if (production) {
         if (config.jwtSecret.length() < 32 ||
             config.jwtSecret.find("change") != std::string::npos) {
-            std::cerr << "[FATAL] Production requires a JWT_SECRET of at least 32 characters.\n";
+
+            std::cerr
+                << "[FATAL] Production requires a JWT_SECRET "
+                << "of at least 32 characters.\n";
+
             return false;
         }
 
         if (config.postgresUrl.empty()) {
-            std::cerr << "[FATAL] DATABASE_URL must be configured in production.\n";
+            std::cerr
+                << "[FATAL] DATABASE_URL must be configured "
+                << "in production.\n";
+
             return false;
         }
-    } else if (config.jwtSecret.empty()) {
-        std::cerr << "[Config] Using development JWT secret.\n";
     }
 
     return true;
 }
 
 trantor::Logger::LogLevel getLogLevel(const std::string &level) {
-    if (level == "DEBUG")
+    if (level == "DEBUG") {
         return trantor::Logger::kDebug;
+    }
 
-    if (level == "WARN")
+    if (level == "WARN") {
         return trantor::Logger::kWarn;
+    }
 
-    if (level == "ERROR")
+    if (level == "ERROR") {
         return trantor::Logger::kError;
+    }
 
     return trantor::Logger::kInfo;
 }
@@ -227,10 +266,11 @@ trantor::Logger::LogLevel getLogLevel(const std::string &level) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-    std::cout << "====================================================\n";
-    std::cout << "   Shared Table Ledger — C++ Drogon REST Backend    \n";
-    std::cout << "   Course Project | Modern C++17 / Drogon Framework \n";
-    std::cout << "====================================================\n";
+    std::cout
+        << "====================================================\n"
+        << "   Shared Table Ledger - C++ Drogon REST Backend\n"
+        << "   Modern C++17 / PostgreSQL\n"
+        << "====================================================\n";
 
     AppConfig config;
 
@@ -243,16 +283,20 @@ int main(int argc, char *argv[]) {
     const bool isProduction = config.appEnv == "production";
 
     std::cout << "[Config] Environment: "
-              << (isProduction ? "PRODUCTION" : "DEVELOPMENT") << "\n";
+              << (isProduction ? "PRODUCTION" : "DEVELOPMENT")
+              << "\n";
 
     std::cout << "[Config] Host: " << config.host
               << ", Port: " << config.port
               << ", Threads: " << config.threads << "\n";
 
-    std::cout << "[Config] Log Level: " << config.logLevel << "\n";
+    std::cout << "[Config] Log Level: "
+              << config.logLevel << "\n";
 
     std::cout << "[Config] PostgreSQL: "
-              << (config.postgresUrl.empty() ? "Not configured" : "Configured")
+              << (config.postgresUrl.empty()
+                      ? "Not configured"
+                      : "Configured")
               << "\n";
 
     if (!validateConfig(config)) {
@@ -262,20 +306,17 @@ int main(int argc, char *argv[]) {
     if (config.jwtSecret.empty()) {
         config.jwtSecret =
             "dev_secret_university_course_mess_manager_2026_default_key";
+
+        std::cout
+            << "[Config] Using development JWT secret.\n";
     }
 
-    // ==================================================
-    // CORS CONFIGURATION
-    // ==================================================
-
+    // Configure CORS
     mess_manager::middleware::CorsFilter::setAllowedOrigins(
         config.allowedOrigins
     );
 
-    // ==================================================
-    // DATABASE INITIALIZATION
-    // ==================================================
-
+    // Initialize database
     std::cout << "[Database] Initializing data layer...\n";
 
     auto &database =
@@ -287,63 +328,62 @@ int main(int argc, char *argv[]) {
     );
 
     if (isProduction && !database.isPostgresConnected()) {
-        std::cerr << "[FATAL] PostgreSQL connection failed: "
-                  << database.getPostgresError() << "\n";
+        std::cerr
+            << "[FATAL] PostgreSQL connection failed: "
+            << database.getPostgresError() << "\n";
 
         return 1;
     }
 
+    // Run database migrations
     const bool migrationSuccess = database.runMigrations();
 
     if (isProduction && !migrationSuccess) {
-        std::cerr << "[FATAL] Database migrations failed.\n";
+        std::cerr
+            << "[FATAL] Database migrations failed in production.\n";
+
         return 1;
     }
 
     std::cout << "[Database] Ready. PostgreSQL: "
-              << (database.isPostgresConnected() ? "CONNECTED" : "STANDALONE")
+              << (database.isPostgresConnected()
+                      ? "CONNECTED"
+                      : "STANDALONE")
               << "\n";
 
-    // ==================================================
-    // AUTHENTICATION INITIALIZATION
-    // ==================================================
-
+    // Initialize authentication service
     mess_manager::g_authService =
         new mess_manager::services::AuthService(config.jwtSecret);
 
     std::cout << "[Auth] JWT authentication initialized.\n";
 
-    // ==================================================
-    // DROGON CONFIGURATION
-    // ==================================================
-
     try {
         auto &app = drogon::app();
 
         app.setLogLevel(getLogLevel(config.logLevel));
-        app.setThreadNum(static_cast<size_t>(config.threads));
+        app.setThreadNum(config.threads);
         app.addListener(config.host, config.port);
 
-        // Register application filters
+        // Register filters using the Drogon v1.9.x API.
+        // This API accepts a shared_ptr, not a name + shared_ptr.
+
         app.registerFilter(
-            "mess_manager::middleware::CorsFilter",
             std::make_shared<mess_manager::middleware::CorsFilter>()
         );
 
         app.registerFilter(
-            "mess_manager::middleware::AuthFilter",
             std::make_shared<mess_manager::middleware::AuthFilter>()
         );
 
         app.registerFilter(
-            "mess_manager::middleware::AdminOnlyFilter",
             std::make_shared<mess_manager::middleware::AdminOnlyFilter>()
         );
 
         std::cout << "[Server] Listening on http://"
                   << config.host << ":" << config.port << "\n";
 
-        std::cout << "[Server] Ready to accept API requests.\n";
+        std::cout
+            << "[Server] Ready to accept API requests.\n";
 
         app.run();
 
