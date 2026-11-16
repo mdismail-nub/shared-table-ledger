@@ -287,6 +287,12 @@ function JoinMessPage() {
           });
     };
 
+    const config = cppApi.getConfigStatus();
+    if (config.isProduction && !config.isConfigured) {
+      toast.error(config.errorMessage || "Production C++ backend is not configured.");
+      return;
+    }
+
     if (cppApi.isAvailable()) {
       cppApi.workspace.previewMess(clean)
         .then((cppRes) => {
@@ -306,11 +312,21 @@ function JoinMessPage() {
             toast.success(`Mess found: ${cppRes.data.name}`);
             return;
           }
+          if (config.isProduction) {
+            toast.error(cppRes.error || "Mess not found with this code on the C++ backend.");
+            return;
+          }
           fallbackToServer();
         })
-        .catch(() => {
+        .catch((err) => {
+          if (config.isProduction) {
+            toast.error(err instanceof Error ? err.message : "Failed to query C++ backend.");
+            return;
+          }
           fallbackToServer();
         });
+    } else if (config.isProduction) {
+      toast.error(config.errorMessage || "Production C++ backend is not configured.");
     } else {
       fallbackToServer();
     }
@@ -497,6 +513,8 @@ function JoinMessPage() {
       }
 
       let guestToken: string | undefined;
+      const config = cppApi.getConfigStatus();
+
       // 1. Try C++ Drogon REST Backend (when available)
       if (cppApi.isAvailable()) {
         try {
@@ -506,9 +524,17 @@ function JoinMessPage() {
           });
           if (cppSession.data?.token) {
             guestToken = cppSession.data.token;
+          } else if (config.isProduction) {
+            toast.error(cppSession.error || "Failed to create session on C++ backend.");
+            setBusy(false);
+            return;
           }
-        } catch {
-          // Fall back to server function
+        } catch (err) {
+          if (config.isProduction) {
+            toast.error(err instanceof Error ? err.message : "Failed to connect to C++ backend.");
+            setBusy(false);
+            return;
+          }
         }
       }
 

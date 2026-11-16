@@ -49,6 +49,39 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // Environment Variable Overrides (Prioritized in Production Cloud Containers)
+    if (const char *envPort = std::getenv("PORT")) {
+        port = static_cast<uint16_t>(std::atoi(envPort));
+    } else if (const char *envAppPort = std::getenv("APP_PORT")) {
+        port = static_cast<uint16_t>(std::atoi(envAppPort));
+    }
+    if (const char *envHost = std::getenv("HOST")) {
+        host = envHost;
+    } else if (const char *envBind = std::getenv("BIND_HOST")) {
+        host = envBind;
+    }
+    if (const char *envDb = std::getenv("DATABASE_URL")) {
+        postgresUrl = envDb;
+    } else if (const char *envPg = std::getenv("POSTGRES_URL")) {
+        postgresUrl = envPg;
+    }
+    if (const char *envJwt = std::getenv("JWT_SECRET")) {
+        jwtSecret = envJwt;
+    }
+    if (const char *envData = std::getenv("DATA_PATH")) {
+        fallbackDataPath = envData;
+    } else if (const char *envFallback = std::getenv("FALLBACK_DATA_PATH")) {
+        fallbackDataPath = envFallback;
+    }
+    if (const char *envThreads = std::getenv("SERVER_THREADS")) {
+        threads = static_cast<size_t>(std::atoi(envThreads));
+    }
+
+    std::cout << "[Config] Server Host: " << host << ", Port: " << port << ", Threads: " << threads << "\n";
+    std::cout << "[Config] Storage Path: " << fallbackDataPath << "\n";
+    std::cout << "[Config] PostgreSQL: " << (postgresUrl.empty() ? "None (Standalone Mode)" : "Configured via environment") << "\n";
+    std::cout << "[Config] JWT Auth: " << (jwtSecret.empty() ? "Unconfigured" : "Protected Key Configured") << "\n";
+
     // Initialize Database & Migration
     std::cout << "[Database] Initializing data layer...\n";
     auto &db = mess_manager::repositories::DatabaseManager::instance();

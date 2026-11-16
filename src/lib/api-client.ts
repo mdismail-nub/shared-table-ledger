@@ -8,6 +8,14 @@ import type { WorkspacePayload } from "./workspace";
 
 const isBrowser = typeof window !== "undefined";
 
+export function isProductionDeployment(): boolean {
+  if (!isBrowser) {
+    return process.env["NODE_ENV"] === "production";
+  }
+  const host = window.location.hostname;
+  return host !== "localhost" && host !== "127.0.0.1" && host !== "[::1]";
+}
+
 export function getCppBackendUrl(): string | null {
   const envUrl =
     (typeof import.meta !== "undefined" && (import.meta.env as Record<string, string | undefined>)?.[
@@ -31,12 +39,39 @@ export function getCppBackendUrl(): string | null {
     }
 
     // On remote hosting (e.g. Vercel deployment), there is no localhost:8080 Drogon daemon.
-    // Return null so the app gracefully uses built-in server functions without
-    // triggering browser Mixed Content blocks or connection refused errors.
+    // Return null so the app requires VITE_CPP_API_URL instead of attempting impossible calls.
     return null;
   }
 
   return "http://localhost:8080";
+}
+
+export interface BackendConfigStatus {
+  isConfigured: boolean;
+  isProduction: boolean;
+  url: string | null;
+  errorMessage?: string;
+}
+
+export function getBackendConfigStatus(): BackendConfigStatus {
+  const isProd = isProductionDeployment();
+  const url = getCppBackendUrl();
+
+  if (isProd && !url) {
+    return {
+      isConfigured: false,
+      isProduction: true,
+      url: null,
+      errorMessage:
+        "Production C++ Drogon backend URL (VITE_CPP_API_URL) is not configured in Vercel. Please set VITE_CPP_API_URL in your Vercel Project Settings.",
+    };
+  }
+
+  return {
+    isConfigured: !!url,
+    isProduction: isProd,
+    url,
+  };
 }
 
 export function isCppBackendAvailable(): boolean {
@@ -78,11 +113,11 @@ async function request<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-    const baseUrl = getCppBackendUrl();
-    if (!baseUrl) {
+    const config = getBackendConfigStatus();
+    if (!config.isConfigured || !config.url) {
         return {
             data: null,
-            error: "C++ backend is not configured for this remote domain",
+            error: config.errorMessage || "C++ Drogon backend is not configured.",
             isNetworkError: true,
         };
     }
@@ -99,9 +134,9 @@ async function request<T>(
     }
 
     try {
-        const url = `${baseUrl}${endpoint}`;
+        const url = `${config.url}${endpoint}`;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout for cloud latencies
 
         const response = await fetch(url, {
             ...options,
@@ -124,9 +159,10 @@ async function request<T>(
         const data = (await response.json()) as T;
         return { data, error: null, isNetworkError: false };
     } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to connect to C++ backend";
         return {
             data: null,
-            error: err instanceof Error ? err.message : "Failed to connect to C++ backend",
+            error: `C++ Backend (${config.url}): ${msg}`,
             isNetworkError: true,
         };
     }
@@ -134,7 +170,24 @@ async function request<T>(
 
 export const cppApi = {
     isAvailable: isCppBackendAvailable,
+    isConfigured: () => getBackendConfigStatus().isConfigured,
+    getConfigStatus: getBackendConfigStatus,
+    isProduction: isProductionDeployment,
     getUrl: getCppBackendUrl,
+
+    // 0. Health
+    health: {
+        async check() {
+            return request<{
+                status: string;
+                service: string;
+                framework: string;
+                version: string;
+                database: string;
+                uptime_seconds: number;
+            }>("/api/health", { method: "GET" });
+        },
+    },
     // 1. Authentication
     auth: {
         async register(data: {

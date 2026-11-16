@@ -52,8 +52,13 @@ export const workspaceOptions = (month = currentMonth()) =>
               cacheWorkspaceToIndexedDB(cppRes.data.mess.id, month, cppRes.data).catch(() => {});
               return cppRes.data;
             }
-          } catch {
-            // Fall through to server function
+            if (cppRes.error && cppApi.isProduction()) {
+              console.warn(`[Workspace C++ Error] ${cppRes.error}`);
+            }
+          } catch (err) {
+            if (cppApi.isProduction()) {
+              console.warn("[Workspace C++ Connection Failed]", err);
+            }
           }
         }
 
@@ -222,8 +227,13 @@ export const workspaceOptions = (month = currentMonth()) =>
               cacheWorkspaceToIndexedDB(adminSession.messId, month, cppRes.data).catch(() => {});
               return cppRes.data;
             }
-          } catch {
-            // Fall through to server function
+            if (cppRes.error && cppApi.isProduction()) {
+              console.warn(`[Admin Workspace C++ Error] ${cppRes.error}`);
+            }
+          } catch (err) {
+            if (cppApi.isProduction()) {
+              console.warn("[Admin Workspace C++ Connection Failed]", err);
+            }
           }
         }
 

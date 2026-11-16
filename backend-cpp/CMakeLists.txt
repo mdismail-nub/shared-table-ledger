@@ -82,6 +82,7 @@ set(SERVER_SOURCES
     controllers/NotificationController.cpp
     controllers/ReportController.cpp
     controllers/SettingsController.cpp
+    controllers/HealthController.cpp
 )
 
 add_executable(mess_manager_server ${SERVER_SOURCES})

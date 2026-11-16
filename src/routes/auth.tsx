@@ -42,37 +42,52 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      // 1. Try C++ Drogon REST Backend (if configured and running)
+      const config = cppApi.getConfigStatus();
+      if (config.isProduction && !config.isConfigured) {
+        toast.error(config.errorMessage || "Production C++ backend is not configured.");
+        setBusy(false);
+        return;
+      }
+
+      // 1. Try C++ Drogon REST Backend
       if (cppApi.isAvailable()) {
-        try {
-          const cppRes = await cppApi.auth.login({ email, password });
-          if (cppRes.data && !cppRes.error) {
-            setAdminSession({
-              userId: cppRes.data.userId,
-              email: cppRes.data.email,
-              name: cppRes.data.name,
-              messId: cppRes.data.messId,
-              token: cppRes.data.token,
-              inviteCode: cppRes.data.inviteCode,
-              createdAt: cppRes.data.createdAt || new Date().toISOString(),
-            });
-            await qc.invalidateQueries();
-            toast.success(`Welcome back, ${cppRes.data.name}!`);
-            navigate({ to: "/dashboard", replace: true });
-            return;
-          } else if (cppRes.error && !cppRes.isNetworkError && !isNetworkOrConnectionError(cppRes.error)) {
-            toast.error(cppRes.error);
-            setBusy(false);
-            return;
-          }
-        } catch {
-          // Fall back only on connection failure
+        const cppRes = await cppApi.auth.login({ email, password });
+        if (cppRes.data && !cppRes.error) {
+          setAdminSession({
+            userId: cppRes.data.userId,
+            email: cppRes.data.email,
+            name: cppRes.data.name,
+            messId: cppRes.data.messId,
+            token: cppRes.data.token,
+            inviteCode: cppRes.data.inviteCode,
+            createdAt: cppRes.data.createdAt || new Date().toISOString(),
+          });
+          await qc.invalidateQueries();
+          toast.success(`Welcome back, ${cppRes.data.name}!`);
+          navigate({ to: "/dashboard", replace: true });
+          return;
+        }
+
+        // In production, NEVER silently fall back to local storage
+        if (config.isProduction) {
+          toast.error(
+            cppRes.error || "Unable to reach the production C++ Drogon backend. Please check backend status."
+          );
+          setBusy(false);
+          return;
+        }
+
+        if (cppRes.error && !cppRes.isNetworkError && !isNetworkOrConnectionError(cppRes.error)) {
+          toast.error(cppRes.error);
+          setBusy(false);
+          return;
         }
       }
 
+      // Local development fallback only
       const session = await signInAdmin({ email, password });
       await qc.invalidateQueries();
-      toast.success(`Welcome back, ${session.name}!`);
+      toast.success(`Welcome back, ${session.name}! (Local Dev Mode)`);
       navigate({ to: "/dashboard", replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign-in failed. Please try again.");
@@ -84,43 +99,59 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      // 1. Try C++ Drogon REST Backend (if configured and running)
+      const config = cppApi.getConfigStatus();
+      if (config.isProduction && !config.isConfigured) {
+        toast.error(config.errorMessage || "Production C++ backend is not configured.");
+        setBusy(false);
+        return;
+      }
+
+      // 1. Try C++ Drogon REST Backend
       if (cppApi.isAvailable()) {
-        try {
-          const cppRes = await cppApi.auth.register({
-            email,
-            password,
-            name,
-            messName,
-            currency,
-          });
-          if (cppRes.data && !cppRes.error) {
-            const loginRes = await cppApi.auth.login({ email, password });
-            if (loginRes.data && !loginRes.error) {
-              setAdminSession({
-                userId: loginRes.data.userId,
-                email: loginRes.data.email,
-                name: loginRes.data.name,
-                messId: loginRes.data.messId,
-                token: loginRes.data.token,
-                inviteCode: loginRes.data.inviteCode,
-                createdAt: loginRes.data.createdAt || new Date().toISOString(),
-              });
-              await qc.invalidateQueries();
-              toast.success(`Admin account created for ${loginRes.data.name}! 🎉`);
-              navigate({ to: "/dashboard", replace: true });
-              return;
-            }
-          } else if (cppRes.error && !cppRes.isNetworkError && !isNetworkOrConnectionError(cppRes.error)) {
-            toast.error(cppRes.error);
-            setBusy(false);
+        const cppRes = await cppApi.auth.register({
+          email,
+          password,
+          name,
+          messName,
+          currency,
+        });
+
+        if (cppRes.data && !cppRes.error) {
+          const loginRes = await cppApi.auth.login({ email, password });
+          if (loginRes.data && !loginRes.error) {
+            setAdminSession({
+              userId: loginRes.data.userId,
+              email: loginRes.data.email,
+              name: loginRes.data.name,
+              messId: loginRes.data.messId,
+              token: loginRes.data.token,
+              inviteCode: loginRes.data.inviteCode,
+              createdAt: loginRes.data.createdAt || new Date().toISOString(),
+            });
+            await qc.invalidateQueries();
+            toast.success(`Admin account created for ${loginRes.data.name}! 🎉`);
+            navigate({ to: "/dashboard", replace: true });
             return;
           }
-        } catch {
-          // Fall back to local store
+        }
+
+        // In production, NEVER silently fall back to local storage
+        if (config.isProduction) {
+          toast.error(
+            cppRes.error || "Registration failed on the C++ Drogon backend. Please verify backend status."
+          );
+          setBusy(false);
+          return;
+        }
+
+        if (cppRes.error && !cppRes.isNetworkError && !isNetworkOrConnectionError(cppRes.error)) {
+          toast.error(cppRes.error);
+          setBusy(false);
+          return;
         }
       }
 
+      // Local development fallback only
       const session = await signUpAdmin({
         email,
         password,

@@ -233,13 +233,19 @@ private:
 
         // Handle CORS Preflight OPTIONS globally
         if (req->method() == HttpMethod::Options) {
+            std::string origin = req->getHeader("Origin");
+            if (origin.empty()) origin = req->getHeader("origin");
+            const char *envCors = std::getenv("CORS_ORIGIN");
+            std::string allowedOrigin = envCors ? envCors : (!origin.empty() ? origin : "*");
+
             auto optionsResp = HttpResponse::newHttpResponse();
             optionsResp->setStatusCode(k204NoContent);
-            optionsResp->addHeader("Access-Control-Allow-Origin", "*");
-            optionsResp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-            optionsResp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Guest-Token");
+            optionsResp->addHeader("Access-Control-Allow-Origin", allowedOrigin);
+            optionsResp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+            optionsResp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Guest-Token, X-Requested-With, Accept");
+            optionsResp->addHeader("Access-Control-Allow-Credentials", "true");
             optionsResp->addHeader("Access-Control-Max-Age", "86400");
-            sendResponse(sock, optionsResp, k204NoContent);
+            sendResponse(sock, optionsResp, k204NoContent, req);
             return;
         }
 
@@ -252,13 +258,13 @@ private:
             errJson["error"] = "Not Found: " + req->path();
             auto notFound = HttpResponse::newHttpJsonResponse(errJson);
             notFound->setStatusCode(k404NotFound);
-            sendResponse(sock, notFound, k404NotFound);
+            sendResponse(sock, notFound, k404NotFound, req);
             return;
         }
 
         // Execute Filter Chain & Handler
-        executeFilterChain(req, *matchedRoute, pathParams, [this, sock](const HttpResponsePtr &resp) {
-            sendResponse(sock, resp, resp ? resp->getStatusCode() : k200OK);
+        executeFilterChain(req, *matchedRoute, pathParams, [this, sock, req](const HttpResponsePtr &resp) {
+            sendResponse(sock, resp, resp ? resp->getStatusCode() : k200OK, req);
         });
     }
 
@@ -421,7 +427,7 @@ private:
         );
     }
 
-    void sendResponse(socket_t sock, const HttpResponsePtr &resp, HttpStatusCode code) {
+    void sendResponse(socket_t sock, const HttpResponsePtr &resp, HttpStatusCode code, const HttpRequestPtr &req = nullptr) {
         if (!resp) return;
 
         std::string statusText = "OK";
@@ -438,6 +444,11 @@ private:
             default: statusText = "OK"; break;
         }
 
+        std::string origin = req ? req->getHeader("Origin") : "";
+        if (origin.empty() && req) origin = req->getHeader("origin");
+        const char *envCors = std::getenv("CORS_ORIGIN");
+        std::string allowedOrigin = envCors ? envCors : (!origin.empty() ? origin : "*");
+
         std::ostringstream ss;
         ss << "HTTP/1.1 " << statusCode << " " << statusText << "\r\n";
         
@@ -448,9 +459,11 @@ private:
             ss << k << ": " << v << "\r\n";
         }
         if (!hasCors) {
-            ss << "Access-Control-Allow-Origin: *\r\n";
-            ss << "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n";
-            ss << "Access-Control-Allow-Headers: Content-Type, Authorization, X-Guest-Token\r\n";
+            ss << "Access-Control-Allow-Origin: " << allowedOrigin << "\r\n";
+            ss << "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH\r\n";
+            ss << "Access-Control-Allow-Headers: Content-Type, Authorization, X-Guest-Token, X-Requested-With, Accept\r\n";
+            ss << "Access-Control-Allow-Credentials: true\r\n";
+            ss << "Access-Control-Max-Age: 86400\r\n";
         }
 
         ss << "Content-Length: " << resp->body().length() << "\r\n";
