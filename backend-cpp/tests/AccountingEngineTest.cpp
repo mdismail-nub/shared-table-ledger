@@ -222,6 +222,57 @@ void testValidationRules() {
     TEST_ASSERT(validators::InputValidator::validateMealCount(15.0).has_value(), "Excessive meal count (>10) rejected");
 }
 
+void testAccountingEdgeCases() {
+    std::cout << "\n--- Testing Accounting Edge Cases ---\n";
+
+    // Scenario 1: Equal consumption across all members
+    // 3 active members, each eating 20 meals. Total meals = 60. Food expense = 6000.
+    // Rate = 6000 / 60 = 100.0. Household = 1500 / 3 = 500.0.
+    std::vector<models::Member> members = {
+        {"m1", "mess1", std::nullopt, "admin", "Alice", "0171", "101", "2026-11-01", "active", "primary", ""},
+        {"m2", "mess1", std::nullopt, "member", "Bob", "0172", "102", "2026-11-01", "active", "mint", ""},
+        {"m3", "mess1", std::nullopt, "member", "Charlie", "0173", "103", "2026-11-01", "active", "peach", ""}
+    };
+    std::vector<models::Meal> meals = {
+        {"ml1", "mess1", "m1", "2026-11-01", 10.0, 10.0, 0.0},
+        {"ml2", "mess1", "m2", "2026-11-01", 10.0, 10.0, 0.0},
+        {"ml3", "mess1", "m3", "2026-11-01", 10.0, 10.0, 0.0}
+    };
+    std::vector<models::Payment> payments = {
+        {"p1", "mess1", "2026-11-01", "m1", 2500.0, "Cash", "Deposit", "", ""},
+        {"p2", "mess1", "2026-11-01", "m2", 2000.0, "bKash", "Deposit", "", ""},
+        {"p3", "mess1", "2026-11-01", "m3", 0.0, "Cash", "Deposit", "", ""}
+    };
+
+    double rate = services::AccountingEngine::calculateMealRate(6000.0, 60.0);
+    double shared = services::AccountingEngine::calculateHouseholdShare(1500.0, 3);
+    TEST_ASSERT(doubleEquals(rate, 100.0), "Equal consumption rate = 100.0");
+    TEST_ASSERT(doubleEquals(shared, 500.0), "Household share = 500.0");
+
+    auto ledger = services::AccountingEngine::buildLedger(members, meals, payments, rate, shared);
+    TEST_ASSERT(ledger.size() == 3, "Ledger size is 3");
+
+    // Alice: deposits = 2500, due = 2000 + 500 = 2500, balance = 0.0
+    TEST_ASSERT(doubleEquals(ledger[0].balance, 0.0), "Alice is perfectly settled (balance = 0.0)");
+
+    // Bob: deposits = 2000, due = 2500, balance = -500.0
+    TEST_ASSERT(doubleEquals(ledger[1].balance, -500.0), "Bob owes 500.0 (balance = -500.0)");
+
+    // Charlie: deposits = 0, due = 2500, balance = -2500.0
+    TEST_ASSERT(doubleEquals(ledger[2].balance, -2500.0), "Charlie owes full due 2500.0 (balance = -2500.0)");
+
+    // Scenario 2: Zero food expense with active meals
+    double zeroRate = services::AccountingEngine::calculateMealRate(0.0, 50.0);
+    TEST_ASSERT(doubleEquals(zeroRate, 0.0), "Zero food expense yields rate 0.0");
+
+    // Scenario 3: Negative balance math precision
+    auto bal = services::AccountingEngine::calculateMemberBalance(123.45, 10.0, 55.55, 200.0);
+    // mealCost = 555.50, due = 755.50, balance = 123.45 - 755.50 = -632.05
+    TEST_ASSERT(doubleEquals(bal.mealCost, 555.50, 0.01), "Meal cost precision check");
+    TEST_ASSERT(doubleEquals(bal.due, 755.50, 0.01), "Due precision check");
+    TEST_ASSERT(doubleEquals(bal.balance, -632.05, 0.01), "Negative balance precision check");
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "  Shared Table Ledger — C++ Backend Automated Tests     \n";
@@ -234,6 +285,7 @@ int main() {
     testCsvExportSanitization();
     testJwtAndCryptography();
     testValidationRules();
+    testAccountingEdgeCases();
 
     std::cout << "\n========================================================\n";
     std::cout << "  ALL C++ UNIT TESTS PASSED SUCCESSFULLY! (100% GREEN)  \n";

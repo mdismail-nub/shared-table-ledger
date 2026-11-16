@@ -4,172 +4,155 @@
 **Binary Target:** `mess_manager_server`  
 **Container Base:** Ubuntu 22.04 (Multi-stage build)  
 **Framework:** Modern C++17 / Drogon REST Framework  
+**Database:** PostgreSQL 14+ (Render Managed PostgreSQL or equivalent)  
 
 ---
 
 ## 1. Overview & Architecture
 
-The Shared Table Ledger backend is an asynchronous, high-performance C++ REST server built with Drogon, JsonCpp, and OpenSSL. In production, it is deployed as a containerized service that connects to a managed PostgreSQL database and serves API requests to the Vercel-hosted React frontend.
+The Shared Table Ledger backend is an asynchronous, high-performance C++ REST server built with Drogon, libpq, JsonCpp, and OpenSSL. In production, it is deployed as a Dockerized Web Service on Render (or Railway) that connects to a managed PostgreSQL database and serves API requests to the Vercel-hosted React frontend.
 
 ```
-┌─────────────────────────────────┐
-│     React Frontend (Vercel)     │
-│  https://*.vercel.app           │
-└────────────────┬────────────────┘
-                 │ HTTPS REST (CORS enabled)
-                 ▼
-┌─────────────────────────────────┐
-│   C++ Drogon Backend (Docker)   │
-│   Render / Railway / Fly.io     │
-└────────────────┬────────────────┘
-                 │ TCP / SSL (DATABASE_URL)
-                 ▼
-┌─────────────────────────────────┐
-│      PostgreSQL 15+ Database    │
-│  Neon / Supabase / Railway      │
-└─────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│       React Frontend (Hosted on Vercel)      │
+│       https://shared-table-ledger.vercel.app │
+└──────────────────────┬───────────────────────┘
+                       │ HTTPS REST (Bearer JWT / CORS)
+                       ▼
+┌──────────────────────────────────────────────┐
+│       C++ Drogon Backend (Docker / Render)   │
+│       https://<service-name>.onrender.com    │
+└──────────────────────┬───────────────────────┘
+                       │ TCP over TLS (sslmode=require)
+                       ▼
+┌──────────────────────────────────────────────┐
+│        PostgreSQL Database (Render / Cloud)  │
+│        Tables, Foreign Keys, Auto-Migrations │
+└──────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 2. Environment Variables Reference
 
-The C++ Drogon server reads all operational configuration directly from environment variables:
+The C++ Drogon server reads all configuration directly from environment variables:
 
-| Variable | Required | Default | Description |
+| Variable | Required in Prod | Default | Description |
 |---|---|---|---|
-| `PORT` | Yes (Cloud) | `8080` | Port assigned dynamically by host (Render: 10000, Railway: dynamic) |
-| `HOST` | No | `0.0.0.0` | Bind IP address (must be `0.0.0.0` inside container) |
-| `DATABASE_URL` | Recommended | `""` | PostgreSQL connection string (`postgres://user:pass@host:5432/dbname?sslmode=require`) |
-| `POSTGRES_URL` | Alternative | `""` | Alternative PostgreSQL connection string |
-| `JWT_SECRET` | Yes (Prod) | Internal key | Strong secret key (min 32 chars) for signing authentication JWT tokens |
-| `CORS_ORIGIN` | Recommended | `*` | Allowed frontend origin (e.g., `https://your-mess.vercel.app`) |
-| `DATA_PATH` | No | `/app/data/mess_store.json` | Path to persistent volume for offline fallback and local cache |
-| `SERVER_THREADS` | No | `4` | Number of worker threads for the Drogon thread pool |
+| `PORT` | Yes (Render sets automatically) | `8080` | Port assigned dynamically by Render (e.g., 10000 or dynamic) |
+| `HOST` | No | `0.0.0.0` | Bind IP address (must remain `0.0.0.0` inside container) |
+| `APP_ENV` | Yes | `development` | Set to `production` in live cloud environment |
+| `DATABASE_URL` | Yes (Prod) | `""` | Render PostgreSQL URI (`postgres://user:pass@dpg-xxx.oregon-postgres.render.com/dbname?sslmode=require`) |
+| `JWT_SECRET` | Yes (Prod) | `""` | Strong 32+ character random secret for signing and verifying tokens |
+| `CORS_ALLOWED_ORIGINS` | Yes (Prod) | `https://shared-table-ledger.vercel.app` | Comma-separated list of allowed frontend origins (no trailing slashes) |
+| `LOG_LEVEL` | No | `INFO` | Logging verbosity: `INFO`, `WARN`, `DEBUG`, or `ERROR` |
+| `SERVER_THREADS` | No | `4` | Worker threads in the Drogon thread pool |
+| `DATA_PATH` | No | `/app/data/mess_store.json` | Path for fallback offline data storage in development |
 
 ---
 
-## 3. Deployment Option A: Render (Recommended, Free Tier Available)
+## 3. Step-by-Step Render Deployment Guide
 
-Render supports native Docker deployment directly from your GitHub repository.
-
-### Step 1: Push Repository to GitHub
-Ensure the latest code containing `backend-cpp/Dockerfile` is pushed to your GitHub repository.
-
-### Step 2: Create a PostgreSQL Database on Render
-1. Go to the [Render Dashboard](https://dashboard.render.com).
+### Step 1: Create a PostgreSQL Database on Render
+1. Log in to your [Render Dashboard](https://dashboard.render.com).
 2. Click **New +** → **PostgreSQL**.
-3. Name: `mess-ledger-db`.
-4. Region: Choose closest to your users (e.g., `Singapore` or `Frankfurt`).
-5. Click **Create Database**.
-6. Once provisioned, copy the **Internal Database URL** (or External URL).
+3. Configure the database:
+   * **Name:** `mess-manager-db`
+   * **Database:** `mess_db`
+   * **User:** `postgres`
+   * **Region:** Select the region closest to you (e.g. `Singapore` or `Oregon`).
+   * **Plan:** `Free`
+4. Click **Create Database**.
+5. When the database status changes to **Available**, copy the **Internal Database URL** (if deploying backend on Render in the same region) or **External Database URL**.
 
-### Step 3: Create a Web Service
-1. Click **New +** → **Web Service**.
+### Step 2: Create a Web Service for C++ Backend
+1. In the Render Dashboard, click **New +** → **Web Service**.
 2. Connect your GitHub repository: `mdismail-nub/shared-table-ledger`.
-3. In service settings:
-   * **Name:** `mess-manager-backend`
-   * **Language:** `Docker`
+3. Configure the service:
+   * **Name:** `shared-table-ledger-api`
+   * **Region:** Same region as your database.
+   * **Branch:** `main`
    * **Root Directory:** `backend-cpp`
-   * **Dockerfile Path:** `Dockerfile` (relative to `backend-cpp`)
+   * **Runtime:** `Docker`
+   * **Dockerfile Path:** `Dockerfile` (or `backend-cpp/Dockerfile` depending on context)
    * **Instance Type:** `Free`
-4. Add **Environment Variables**:
-   * `PORT`: `10000` (Render's default)
-   * `DATABASE_URL`: *(Paste your Render PostgreSQL connection string)*
-   * `JWT_SECRET`: *(Generate a strong 32+ character random string)*
-   * `CORS_ORIGIN`: `*` (or your specific Vercel URL, e.g. `https://shared-table-ledger.vercel.app`)
-5. Click **Deploy Web Service**.
+4. Under **Environment Variables**, add:
+   * `APP_ENV`: `production`
+   * `DATABASE_URL`: *(Paste the PostgreSQL connection string from Step 1, ensuring it includes `?sslmode=require`)*
+   * `JWT_SECRET`: *(Generate a 32+ character secure secret, e.g. using `openssl rand -base64 32`)*
+   * `CORS_ALLOWED_ORIGINS`: `https://shared-table-ledger.vercel.app,http://localhost:3000`
+   * `LOG_LEVEL`: `INFO`
+5. Click **Create Web Service**.
 
-### Step 4: Verify Deployment
-Once the build completes, Render will provide a public URL like:
-`https://mess-manager-backend.onrender.com`
+Render will trigger the multi-stage Docker build, compile Drogon and the backend binary, execute unit tests, and launch the server.
 
-Verify using curl or a browser:
+### Step 3: Verify Backend Deployment
+Once deployed, copy the service URL (e.g., `https://shared-table-ledger-api.onrender.com`).
+Verify the health endpoint using curl or a browser:
 ```bash
-curl https://mess-manager-backend.onrender.com/api/health
+curl https://shared-table-ledger-api.onrender.com/api/health
 ```
 Expected response:
 ```json
 {
-  "status": "healthy",
-  "service": "mess_manager_cpp_backend",
+  "database": "postgresql_connected",
   "framework": "Modern C++17 / Drogon REST Framework",
-  "version": "1.0.0",
-  "uptime_seconds": 15,
-  "database": "postgresql_connected"
+  "service": "mess_manager_cpp_backend",
+  "status": "healthy",
+  "uptime_seconds": 12,
+  "version": "1.0.0"
 }
 ```
 
 ---
 
-## 4. Deployment Option B: Railway
+## 4. Connecting Frontend on Vercel to Render Backend
 
-Railway automatically detects Dockerfiles and provisions instant PostgreSQL databases.
-
-### Step 1: Create a Railway Project
-1. Go to [Railway Dashboard](https://railway.app).
-2. Click **New Project** → **Deploy from GitHub repo**.
-3. Select `mdismail-nub/shared-table-ledger`.
-4. In **Settings** → **Build**:
-   * Set **Root Directory** to `/backend-cpp`.
-   * Set **Dockerfile Path** to `Dockerfile`.
-
-### Step 2: Add PostgreSQL
-1. Inside the project canvas, click **+ New** → **Database** → **Add PostgreSQL**.
-2. Click on the PostgreSQL service → **Variables** → Copy `DATABASE_URL`.
-
-### Step 3: Configure Backend Variables
-In your C++ backend service settings, add:
-* `DATABASE_URL`: `${{Postgres.DATABASE_URL}}` (Railway reference)
-* `JWT_SECRET`: `super_secret_jwt_key_at_least_32_characters_long`
-* `CORS_ORIGIN`: `*`
-
-### Step 4: Generate Domain
-In backend service **Settings** → **Networking** → Click **Generate Domain**.
-You will receive a public HTTPS URL (e.g. `https://mess-backend-production.up.railway.app`).
+1. Go to your [Vercel Dashboard](https://vercel.com/dashboard).
+2. Select your `shared-table-ledger` project.
+3. Navigate to **Settings** → **Environment Variables**.
+4. Add or update:
+   * **Key:** `VITE_CPP_API_URL`
+   * **Value:** `https://shared-table-ledger-api.onrender.com` (your Render backend URL, without trailing slash)
+   * **Environments:** Production, Preview, Development
+5. Go to **Deployments** and click **Redeploy** on the latest deployment so Vite picks up the new environment variable.
 
 ---
 
-## 5. Deployment Option C: Self-Hosted Docker / VPS
+## 5. Database Schema & Auto-Migrations
 
-For deploying on an Ubuntu VPS (DigitalOcean, AWS EC2, Linode):
+On startup in production (`APP_ENV=production`), the C++ server verifies connection to PostgreSQL and automatically runs `backend-cpp/migrations/0001_initial_schema.sql`:
 
+- Creates tables if they do not exist:
+  - `messes`
+  - `mess_members`
+  - `mess_meals`
+  - `mess_expenses`
+  - `payments`
+  - `mess_notifications`
+  - `mess_guest_sessions`
+  - `mess_users`
+- Creates all foreign keys with `ON DELETE CASCADE`
+- Creates unique indexes (e.g. `(member_id, date)` on `mess_meals`, `(user_id)` on `mess_members`)
+- Creates performance indexes on all query filters
+
+If you wish to manually inspect or execute the schema via `psql`:
 ```bash
-# 1. Clone repository
-git clone https://github.com/mdismail-nub/shared-table-ledger.git
-cd shared-table-ledger/backend-cpp
-
-# 2. Build Docker container
-docker build -t mess-manager-backend:latest .
-
-# 3. Run container
-docker run -d \
-  --name mess_backend \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -e PORT=8080 \
-  -e DATABASE_URL="postgresql://user:password@db-host:5432/mess_db?sslmode=require" \
-  -e JWT_SECRET="your_secure_random_jwt_secret_32_chars" \
-  -e CORS_ORIGIN="https://shared-table-ledger.vercel.app" \
-  -v /var/data/mess:/app/data \
-  mess-manager-backend:latest
-
-# 4. Check status
-curl http://localhost:8080/api/health
+psql "$DATABASE_URL" -f backend-cpp/migrations/0001_initial_schema.sql
 ```
 
 ---
 
-## 6. Troubleshooting Production Issues
+## 6. Troubleshooting
 
-### Issue 1: Health check timeout on Render / Railway
-* **Cause:** The server did not bind to the port expected by the platform.
-* **Fix:** The server now automatically inspects `PORT` and `APP_PORT`. Ensure the port in Render matches `PORT` (e.g., 10000).
+### Issue 1: CORS Policy Error in Browser
+- **Symptom:** `Access to fetch at 'https://api...' from origin 'https://...' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present.`
+- **Resolution:** Verify that `CORS_ALLOWED_ORIGINS` in your Render Web Service environment variables includes your exact Vercel frontend URL (including `https://` and without trailing slash).
 
-### Issue 2: CORS errors in browser console
-* **Error:** `No 'Access-Control-Allow-Origin' header is present on the requested resource.`
-* **Fix:** The C++ Drogon server now reflects the incoming `Origin` header dynamically and supports `Access-Control-Allow-Credentials: true` across all endpoints and preflight requests. Set `CORS_ORIGIN` to your Vercel URL or `*`.
+### Issue 2: 401 Unauthorized / Token Expiration
+- **Symptom:** API calls return 401.
+- **Resolution:** The frontend API client automatically catches 401 responses and redirects to `/auth` to prompt the user to sign in again. Verify that `JWT_SECRET` is consistent across server restarts on Render.
 
-### Issue 3: Mixed Content (`https://` calling `http://`)
-* **Error:** `The page at 'https://...' was loaded over HTTPS, but requested an insecure endpoint 'http://...'`.
-* **Fix:** You MUST configure the frontend's `VITE_CPP_API_URL` with an **`https://`** URL. Render, Railway, and Fly.io provide free automatic SSL certificates for all deployed apps.
+### Issue 3: Mixed Content Error
+- **Symptom:** `The page at 'https://...' was loaded over HTTPS, but requested an insecure resource 'http://...'`.
+- **Resolution:** In Vercel environment variables, ensure `VITE_CPP_API_URL` starts with `https://`, not `http://`. Render automatically issues free Let's Encrypt SSL certificates for all `*.onrender.com` URLs.

@@ -1,0 +1,31 @@
+# Render Infrastructure Blueprint for Shared Table Ledger
+# Provisions both PostgreSQL and C++ Drogon Web Service in one click
+
+services:
+  - type: web
+    name: shared-table-ledger-api
+    runtime: docker
+    dockerfilePath: ./backend-cpp/Dockerfile
+    dockerContext: ./backend-cpp
+    plan: free
+    region: singapore
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shared-table-ledger-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://shared-table-ledger.vercel.app,http://localhost:3000,http://localhost:5173
+      - key: LOG_LEVEL
+        value: INFO
+
+databases:
+  - name: shared-table-ledger-db
+    databaseName: mess_db
+    user: postgres
+    plan: free
+    region: singapore

@@ -3,16 +3,22 @@
     "host": "0.0.0.0",
     "port": 8080,
     "threads": 4,
-    "log_level": "DEBUG",
-    "jwt_secret": "mess_manager_super_secure_university_course_jwt_secret_key_2026!"
+    "log_level": "INFO",
+    "jwt_secret": ""
   },
   "database": {
     "postgres_url": "",
     "fallback_data_file": "./data/mess_store.json"
   },
   "cors": {
-    "allow_origins": ["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"],
-    "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    "allow_headers": ["Content-Type", "Authorization", "X-Guest-Token"]
+    "allow_origins": [
+      "https://shared-table-ledger.vercel.app",
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://127.0.0.1:3000",
+      "http://127.0.0.1:5173"
+    ],
+    "allow_methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    "allow_headers": ["Content-Type", "Authorization", "X-Guest-Token", "Accept"]
   }
 }

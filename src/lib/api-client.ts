@@ -153,6 +153,12 @@ async function request<T>(
             } catch {
                 // ignore
             }
+
+            // Redirect to auth on 401 Unauthorized (token expired or invalidated)
+            if (response.status === 401 && isBrowser && !window.location.pathname.startsWith("/auth")) {
+                window.location.href = "/auth";
+            }
+
             return { data: null, error: errorMsg, isNetworkError: false };
         }
 

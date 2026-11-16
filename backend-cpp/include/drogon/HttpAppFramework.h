@@ -178,6 +178,52 @@ private:
         }
     }
 
+    std::string resolveAllowedOrigin(const std::string &origin) {
+        std::string clean = origin;
+        size_t first = clean.find_first_not_of(" \t\r\n");
+        if (first != std::string::npos) {
+            size_t last = clean.find_last_not_of(" \t\r\n");
+            clean = clean.substr(first, (last - first + 1));
+        }
+
+        const char *envCorsList = std::getenv("CORS_ALLOWED_ORIGINS");
+        if (!envCorsList) envCorsList = std::getenv("CORS_ORIGIN");
+
+        const char *appEnv = std::getenv("APP_ENV");
+        bool isDev = (!appEnv || std::string(appEnv) != "production");
+
+        if (isDev && !clean.empty()) {
+            if (clean.rfind("http://localhost:", 0) == 0 ||
+                clean.rfind("http://127.0.0.1:", 0) == 0 ||
+                clean == "http://localhost" ||
+                clean == "http://127.0.0.1") {
+                return clean;
+            }
+        }
+
+        if (envCorsList) {
+            std::string listStr = envCorsList;
+            std::istringstream iss(listStr);
+            std::string item;
+            while (std::getline(iss, item, ',')) {
+                size_t f = item.find_first_not_of(" \t\r\n");
+                if (f != std::string::npos) {
+                    size_t l = item.find_last_not_of(" \t\r\n");
+                    item = item.substr(f, (l - f + 1));
+                }
+                if (item == "*" || item == clean) {
+                    return clean.empty() ? item : clean;
+                }
+            }
+        }
+
+        if (clean == "https://shared-table-ledger.vercel.app") {
+            return clean;
+        }
+
+        return !clean.empty() ? clean : "*";
+    }
+
     void handleClient(socket_t sock) {
         // Set socket receive timeout (3 seconds)
 #ifdef _WIN32
@@ -235,15 +281,16 @@ private:
         if (req->method() == HttpMethod::Options) {
             std::string origin = req->getHeader("Origin");
             if (origin.empty()) origin = req->getHeader("origin");
-            const char *envCors = std::getenv("CORS_ORIGIN");
-            std::string allowedOrigin = envCors ? envCors : (!origin.empty() ? origin : "*");
+            std::string allowedOrigin = resolveAllowedOrigin(origin);
 
             auto optionsResp = HttpResponse::newHttpResponse();
             optionsResp->setStatusCode(k204NoContent);
             optionsResp->addHeader("Access-Control-Allow-Origin", allowedOrigin);
             optionsResp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
             optionsResp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Guest-Token, X-Requested-With, Accept");
-            optionsResp->addHeader("Access-Control-Allow-Credentials", "true");
+            if (allowedOrigin != "*") {
+                optionsResp->addHeader("Access-Control-Allow-Credentials", "true");
+            }
             optionsResp->addHeader("Access-Control-Max-Age", "86400");
             sendResponse(sock, optionsResp, k204NoContent, req);
             return;
@@ -446,8 +493,7 @@ private:
 
         std::string origin = req ? req->getHeader("Origin") : "";
         if (origin.empty() && req) origin = req->getHeader("origin");
-        const char *envCors = std::getenv("CORS_ORIGIN");
-        std::string allowedOrigin = envCors ? envCors : (!origin.empty() ? origin : "*");
+        std::string allowedOrigin = resolveAllowedOrigin(origin);
 
         std::ostringstream ss;
         ss << "HTTP/1.1 " << statusCode << " " << statusText << "\r\n";
@@ -462,7 +508,9 @@ private:
             ss << "Access-Control-Allow-Origin: " << allowedOrigin << "\r\n";
             ss << "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH\r\n";
             ss << "Access-Control-Allow-Headers: Content-Type, Authorization, X-Guest-Token, X-Requested-With, Accept\r\n";
-            ss << "Access-Control-Allow-Credentials: true\r\n";
+            if (allowedOrigin != "*") {
+                ss << "Access-Control-Allow-Credentials: true\r\n";
+            }
             ss << "Access-Control-Max-Age: 86400\r\n";
         }
 

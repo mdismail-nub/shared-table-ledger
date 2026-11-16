@@ -5,6 +5,7 @@
 #include <optional>
 #include <memory>
 #include <mutex>
+#include "PgClient.h"
 #include "../models/Mess.h"
 #include "../models/Member.h"
 #include "../models/Meal.h"
@@ -29,9 +30,10 @@ public:
 
     // Check if connected to real PostgreSQL
     bool isPostgresConnected() const;
+    std::string getPostgresError() const;
 
     // --- Mess Operations ---
-    bool createMess(const models::Mess &mess);
+    bool createMess(models::Mess mess);
     std::optional<models::Mess> getMessById(const std::string &id);
     std::optional<models::Mess> getMessByInviteCode(const std::string &code);
     bool updateMess(const models::Mess &mess);
@@ -40,7 +42,7 @@ public:
     // --- Member Operations ---
     std::vector<models::Member> getMembersByMessId(const std::string &messId);
     std::optional<models::Member> getMemberById(const std::string &memberId);
-    bool addMember(const models::Member &member);
+    bool addMember(models::Member member);
     bool updateMember(const models::Member &member);
     bool deleteMember(const std::string &memberId);
 
@@ -50,12 +52,12 @@ public:
 
     // --- Expense Operations ---
     std::vector<models::Expense> getExpenses(const std::string &messId, const std::string &startDate, const std::string &endDate);
-    bool addExpense(const models::Expense &expense);
+    bool addExpense(models::Expense expense);
     bool deleteExpense(const std::string &expenseId);
 
     // --- Payment Operations ---
     std::vector<models::Payment> getPayments(const std::string &messId, const std::string &startDate, const std::string &endDate);
-    bool addPayment(const models::Payment &payment);
+    bool addPayment(models::Payment payment);
     bool deletePayment(const std::string &paymentId);
 
     // --- Notification Operations ---
@@ -64,15 +66,15 @@ public:
         const std::optional<std::string> &memberId,
         bool isAdmin
     );
-    bool addNotification(const models::Notification &notification);
+    bool addNotification(models::Notification notification);
     bool deleteNotification(const std::string &notificationId);
 
     // --- Guest Session Operations ---
-    bool createGuestSession(const models::GuestSession &session);
+    bool createGuestSession(models::GuestSession session);
     std::optional<models::GuestSession> getGuestSession(const std::string &token);
 
     // --- User Operations ---
-    bool createUser(const models::User &user);
+    bool createUser(models::User user);
     std::optional<models::User> getUserByEmail(const std::string &email);
     std::optional<models::User> getUserById(const std::string &userId);
 

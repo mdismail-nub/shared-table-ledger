@@ -13,6 +13,29 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Find PostgreSQL libpq (Linux/Docker and systems with libpq installed)
+find_package(PostgreSQL QUIET)
+if(PostgreSQL_FOUND)
+    message(STATUS "PostgreSQL libpq found: ${PostgreSQL_LIBRARIES}")
+    add_compile_definitions(HAVE_LIBPQ=1)
+    include_directories(${PostgreSQL_INCLUDE_DIRS})
+    set(PG_LINK_LIBS ${PostgreSQL_LIBRARIES})
+else()
+    message(STATUS "PostgreSQL libpq not found on host. Local builds will use in-memory store.")
+    set(PG_LINK_LIBS "")
+endif()
+
+# Find Drogon (optional in environment with Drogon installed)
+find_package(Drogon QUIET)
+if(Drogon_FOUND)
+    message(STATUS "Drogon found: ${Drogon_DIR}")
+    add_compile_definitions(HAVE_DROGON=1)
+    set(DROGON_LINK_LIBS Drogon::Drogon)
+else()
+    message(STATUS "Drogon not installed globally. Using embedded Drogon-compatible framework.")
+    set(DROGON_LINK_LIBS "")
+endif()
+
 include(FetchContent)
 
 # 1. JsonCpp dependency (Found locally or fetched automatically)
@@ -55,6 +78,7 @@ set(CORE_SOURCES
     services/DomainServices.cpp
     services/AuthService.cpp
     services/WorkspaceService.cpp
+    repositories/PgClient.cpp
     repositories/DatabaseManager.cpp
 )
 
@@ -64,7 +88,11 @@ add_executable(mess_manager_tests
     ${CORE_SOURCES}
 )
 
-target_link_libraries(mess_manager_tests PRIVATE jsoncpp_static)
+if(WIN32)
+    target_link_libraries(mess_manager_tests PRIVATE jsoncpp_static ws2_32 ${PG_LINK_LIBS})
+else()
+    target_link_libraries(mess_manager_tests PRIVATE jsoncpp_static pthread ${PG_LINK_LIBS})
+endif()
 
 # 2. Main C++ Server Executable
 set(SERVER_SOURCES
@@ -87,9 +115,9 @@ set(SERVER_SOURCES
 
 add_executable(mess_manager_server ${SERVER_SOURCES})
 if(WIN32)
-    target_link_libraries(mess_manager_server PRIVATE jsoncpp_static ws2_32)
+    target_link_libraries(mess_manager_server PRIVATE jsoncpp_static ws2_32 ${PG_LINK_LIBS} ${DROGON_LINK_LIBS})
 else()
-    target_link_libraries(mess_manager_server PRIVATE jsoncpp_static pthread)
+    target_link_libraries(mess_manager_server PRIVATE jsoncpp_static pthread ${PG_LINK_LIBS} ${DROGON_LINK_LIBS})
 endif()
 
 # Enable CTest
