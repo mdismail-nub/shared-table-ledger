@@ -27,31 +27,23 @@ include(FetchContent)
 # POSTGRESQL
 # ==================================================
 
-find_package(PostgreSQL QUIET)
+find_package(PostgreSQL REQUIRED)
 
-if(PostgreSQL_FOUND)
-    message(STATUS "PostgreSQL found: ${PostgreSQL_LIBRARIES}")
-    add_compile_definitions(HAVE_LIBPQ=1)
-    set(PG_LINK_LIBS PostgreSQL::PostgreSQL)
-else()
-    message(STATUS "PostgreSQL not found. Using in-memory storage.")
-    set(PG_LINK_LIBS "")
-endif()
+message(STATUS "PostgreSQL found: ${PostgreSQL_LIBRARIES}")
+
+add_compile_definitions(HAVE_LIBPQ=1)
 
 # ==================================================
-# DROGON
+# REAL DROGON FRAMEWORK
 # ==================================================
 
-find_package(Drogon QUIET)
+find_package(Drogon CONFIG REQUIRED)
 
-if(Drogon_FOUND)
-    message(STATUS "Drogon found: ${Drogon_DIR}")
-    add_compile_definitions(HAVE_DROGON=1)
-    set(DROGON_LINK_LIBS Drogon::Drogon)
-else()
-    message(STATUS "Drogon not found.")
-    set(DROGON_LINK_LIBS "")
+if(NOT TARGET Drogon::Drogon)
+    message(FATAL_ERROR "Drogon was found, but Drogon::Drogon target is missing.")
 endif()
+
+message(STATUS "Real Drogon found: ${Drogon_DIR}")
 
 # ==================================================
 # JSONCPP
@@ -72,7 +64,7 @@ elseif(TARGET jsoncpp_static)
     message(STATUS "Using jsoncpp_static")
 
 else()
-    message(STATUS "System JsonCpp target not found. Fetching JsonCpp 1.9.5.")
+    message(STATUS "System JsonCpp unavailable. Fetching JsonCpp 1.9.5.")
 
     FetchContent_Declare(
         jsoncpp
@@ -95,17 +87,20 @@ else()
     elseif(TARGET jsoncpp_lib)
         set(JSONCPP_TARGET jsoncpp_lib)
     else()
-        message(FATAL_ERROR "JsonCpp was fetched but no usable CMake target was found.")
+        message(FATAL_ERROR "No usable JsonCpp target was found.")
     endif()
 endif()
 
 # ==================================================
 # COMMON INCLUDE DIRECTORIES
+# IMPORTANT:
+# Do not add the local include/ directory here.
+# It contains compatibility Drogon headers that
+# would shadow the real installed Drogon headers.
 # ==================================================
 
 set(COMMON_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/models
     ${CMAKE_CURRENT_SOURCE_DIR}/services
     ${CMAKE_CURRENT_SOURCE_DIR}/repositories
@@ -148,7 +143,7 @@ target_include_directories(mess_manager_tests PRIVATE
 
 target_link_libraries(mess_manager_tests PRIVATE
     ${JSONCPP_TARGET}
-    ${PG_LINK_LIBS}
+    PostgreSQL::PostgreSQL
 )
 
 if(WIN32)
@@ -158,7 +153,7 @@ else()
 endif()
 
 # ==================================================
-# SERVER EXECUTABLE
+# PRODUCTION SERVER
 # ==================================================
 
 set(SERVER_SOURCES
@@ -188,9 +183,9 @@ target_include_directories(mess_manager_server PRIVATE
 )
 
 target_link_libraries(mess_manager_server PRIVATE
+    Drogon::Drogon
     ${JSONCPP_TARGET}
-    ${PG_LINK_LIBS}
-    ${DROGON_LINK_LIBS}
+    PostgreSQL::PostgreSQL
 )
 
 if(WIN32)
@@ -210,9 +205,16 @@ add_test(
     COMMAND mess_manager_tests
 )
 
+# ==================================================
+# BUILD INFORMATION
+# ==================================================
+
 message(STATUS "======================================")
 message(STATUS "Mess Manager Backend Configuration")
+message(STATUS "C++ Standard: C++17")
 message(STATUS "JSONCpp target: ${JSONCPP_TARGET}")
-message(STATUS "PostgreSQL: ${PostgreSQL_FOUND}")
-message(STATUS "Drogon: ${Drogon_FOUND}")
+message(STATUS "PostgreSQL: ENABLED")
+message(STATUS "Drogon: ENABLED")
+message(STATUS "Production server: mess_manager_server")
+message(STATUS "Test executable: mess_manager_tests")
 message(STATUS "======================================")
