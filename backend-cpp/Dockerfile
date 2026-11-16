@@ -1,13 +1,7 @@
 
-# ==============================================================================
-# Shared Table Ledger - Production Dockerfile
-# C++17 / Drogon 1.9.8 / PostgreSQL
-# Memory-optimized for Render
-# ==============================================================================
-
-# ------------------------------------------------------------------------------
-# Stage 1: Builder
-# ------------------------------------------------------------------------------
+# ==========================================
+# Stage 1: Build
+# ==========================================
 FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -26,11 +20,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Build Drogon with PostgreSQL support
+# Build and install Drogon
 RUN git clone --depth 1 --branch v1.9.8 \
     https://github.com/drogonframework/drogon.git /tmp/drogon \
     && cd /tmp/drogon \
-    && git submodule update --init --recursive \
+    && git submodule update --init \
     && cmake -B build \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_POSTGRESQL=ON \
@@ -40,24 +34,25 @@ RUN git clone --depth 1 --branch v1.9.8 \
     && cmake --install build \
     && rm -rf /tmp/drogon
 
+# Copy backend source from the repository root.
+# Render Docker build context must be the repository root.
 WORKDIR /src
+COPY backend-cpp/ .
 
-COPY . .
-
-# Configure backend
+# Configure and build the backend
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-# Compile backend sequentially
 RUN cmake --build build --config Release --parallel 1
 
-# Run tests if available
-RUN if [ -x ./build/mess_manager_tests ]; then \
+# Run tests if the test executable exists
+RUN if [ -f ./build/mess_manager_tests ]; then \
         ./build/mess_manager_tests; \
     fi
 
-# ------------------------------------------------------------------------------
-# Stage 2: Production Runtime
-# ------------------------------------------------------------------------------
+
+# ==========================================
+# Stage 2: Runtime
+# ==========================================
 FROM ubuntu:22.04 AS runner
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -68,38 +63,44 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     ca-certificates \
     curl \
-    zlib1g \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -g 1001 appgroup && \
-    useradd -u 1001 -g appgroup -m -s /bin/bash appuser
+# Create non-root user
+RUN groupadd -g 1001 appgroup \
+    && useradd -u 1001 -g appgroup -m -s /bin/bash appuser
 
 WORKDIR /app
 
-# Copy executable
+# Copy backend executable
 COPY --from=builder --chown=appuser:appgroup \
-    /src/build/mess_manager_server /app/mess_manager_server
+    /src/build/mess_manager_server \
+    /app/mess_manager_server
 
 # Copy migrations and configuration
 COPY --from=builder --chown=appuser:appgroup \
-    /src/migrations /app/migrations
+    /src/migrations \
+    /app/migrations
 
 COPY --from=builder --chown=appuser:appgroup \
-    /src/config /app/config
+    /src/config \
+    /app/config
 
-RUN mkdir -p /app/data && chown -R appuser:appgroup /app/data
+# Create application data directory
+RUN mkdir -p /app/data \
+    && chown -R appuser:appgroup /app
 
 USER appuser
 
-ENV HOST=0.0.0.0 \
-    PORT=8080 \
-    APP_ENV=production \
-    LOG_LEVEL=INFO \
-    DATA_PATH=/app/data/mess_store.json
+ENV HOST=0.0.0.0
+ENV PORT=8080
+ENV APP_ENV=production
+ENV LOG_LEVEL=INFO
+ENV DATA_PATH=/app/data/mess_store.json
 
 EXPOSE 8080
 
+# Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
+    CMD curl -f http://localhost:${PORT}/api/health || exit 1
 
 ENTRYPOINT ["/app/mess_manager_server"]
