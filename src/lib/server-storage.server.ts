@@ -26,12 +26,19 @@ interface ServerDatabase {
   guestSessions?: Record<string, GuestSession> | undefined;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), ".data");
+const DATA_DIR =
+  process.env["VERCEL"] || process.env["AWS_LAMBDA_FUNCTION_NAME"]
+    ? path.resolve("/tmp", ".data")
+    : path.resolve(process.cwd(), ".data");
 const STORE_PATH = path.join(DATA_DIR, "mess_store.json");
 
 function ensureDirectoryExists() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch {
+    // Non-fatal on read-only serverless filesystems
   }
 }
 

@@ -40,19 +40,21 @@ export const workspaceOptions = (month = currentMonth()) =>
     queryFn: async (): Promise<WorkspacePayload> => {
       const memberSession = getMemberSession();
       if (memberSession?.code) {
-        // 1. Primary: C++ Drogon REST Backend
-        try {
-          const cppRes = await cppApi.workspace.getWorkspaceByCode(
-            memberSession.code,
-            month,
-            memberSession.token,
-          );
-          if (cppRes.data && !cppRes.error) {
-            cacheWorkspaceToIndexedDB(cppRes.data.mess.id, month, cppRes.data).catch(() => {});
-            return cppRes.data;
+        // 1. Primary: C++ Drogon REST Backend (when available)
+        if (cppApi.isAvailable()) {
+          try {
+            const cppRes = await cppApi.workspace.getWorkspaceByCode(
+              memberSession.code,
+              month,
+              memberSession.token,
+            );
+            if (cppRes.data && !cppRes.error) {
+              cacheWorkspaceToIndexedDB(cppRes.data.mess.id, month, cppRes.data).catch(() => {});
+              return cppRes.data;
+            }
+          } catch {
+            // Fall through to server function
           }
-        } catch {
-          // Fall through to server function
         }
 
         try {
@@ -212,15 +214,17 @@ export const workspaceOptions = (month = currentMonth()) =>
 
       const adminSession = getAdminSession();
       if (adminSession) {
-        // 1. Primary: C++ Drogon REST Backend
-        try {
-          const cppRes = await cppApi.workspace.getWorkspace(month);
-          if (cppRes.data && !cppRes.error) {
-            cacheWorkspaceToIndexedDB(adminSession.messId, month, cppRes.data).catch(() => {});
-            return cppRes.data;
+        // 1. Primary: C++ Drogon REST Backend (when available)
+        if (cppApi.isAvailable()) {
+          try {
+            const cppRes = await cppApi.workspace.getWorkspace(month);
+            if (cppRes.data && !cppRes.error) {
+              cacheWorkspaceToIndexedDB(adminSession.messId, month, cppRes.data).catch(() => {});
+              return cppRes.data;
+            }
+          } catch {
+            // Fall through to server function
           }
-        } catch {
-          // Fall through to server function
         }
 
         try {

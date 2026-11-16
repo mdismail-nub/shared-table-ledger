@@ -6,10 +6,59 @@ import { getMemberSession } from "./data";
 import type { Mess, Member, Meal, Expense, Payment, Summary, NotificationItem } from "./data";
 import type { WorkspacePayload } from "./workspace";
 
-const CPP_BACKEND_URL =
-  (typeof process !== "undefined" && process.env?.["VITE_CPP_API_URL"]) ||
-  (typeof window !== "undefined" && (window as unknown as { __CPP_API_URL__?: string }).__CPP_API_URL__) ||
-  "http://localhost:8080";
+const isBrowser = typeof window !== "undefined";
+
+export function getCppBackendUrl(): string | null {
+  const envUrl =
+    (typeof import.meta !== "undefined" && (import.meta.env as Record<string, string | undefined>)?.[
+      "VITE_CPP_API_URL"
+    ]) ||
+    (typeof process !== "undefined" && process.env?.["VITE_CPP_API_URL"]) ||
+    (isBrowser && (window as unknown as { __CPP_API_URL__?: string }).__CPP_API_URL__);
+
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, "");
+  }
+
+  if (isBrowser) {
+    const isLocalhost =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "[::1]";
+
+    if (isLocalhost) {
+      return "http://localhost:8080";
+    }
+
+    // On remote hosting (e.g. Vercel deployment), there is no localhost:8080 Drogon daemon.
+    // Return null so the app gracefully uses built-in server functions without
+    // triggering browser Mixed Content blocks or connection refused errors.
+    return null;
+  }
+
+  return "http://localhost:8080";
+}
+
+export function isCppBackendAvailable(): boolean {
+  return getCppBackendUrl() !== null;
+}
+
+export function isNetworkOrConnectionError(error: string | null | undefined): boolean {
+  if (!error) return false;
+  const lower = error.toLowerCase();
+  return (
+    lower.includes("failed to fetch") ||
+    lower.includes("networkerror") ||
+    lower.includes("connection refused") ||
+    lower.includes("failed to connect") ||
+    lower.includes("not configured") ||
+    lower.includes("not available") ||
+    lower.includes("aborted") ||
+    lower.includes("timeout") ||
+    lower.includes("load failed") ||
+    lower.includes("err_connection")
+  );
+}
 
 function getAuthToken(): string | undefined {
     const admin = getAdminSession();
@@ -19,10 +68,25 @@ function getAuthToken(): string | undefined {
     return undefined;
 }
 
+export interface ApiResponse<T> {
+  data: T | null;
+  error: string | null;
+  isNetworkError?: boolean;
+}
+
 async function request<T>(
     endpoint: string,
     options: RequestInit = {}
-): Promise<{ data: T | null; error: string | null }> {
+): Promise<ApiResponse<T>> {
+    const baseUrl = getCppBackendUrl();
+    if (!baseUrl) {
+        return {
+            data: null,
+            error: "C++ backend is not configured for this remote domain",
+            isNetworkError: true,
+        };
+    }
+
     const token = getAuthToken();
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -35,7 +99,7 @@ async function request<T>(
     }
 
     try {
-        const url = `${CPP_BACKEND_URL}${endpoint}`;
+        const url = `${baseUrl}${endpoint}`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
 
@@ -54,20 +118,23 @@ async function request<T>(
             } catch {
                 // ignore
             }
-            return { data: null, error: errorMsg };
+            return { data: null, error: errorMsg, isNetworkError: false };
         }
 
         const data = (await response.json()) as T;
-        return { data, error: null };
+        return { data, error: null, isNetworkError: false };
     } catch (err) {
         return {
             data: null,
             error: err instanceof Error ? err.message : "Failed to connect to C++ backend",
+            isNetworkError: true,
         };
     }
 }
 
 export const cppApi = {
+    isAvailable: isCppBackendAvailable,
+    getUrl: getCppBackendUrl,
     // 1. Authentication
     auth: {
         async register(data: {

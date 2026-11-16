@@ -242,32 +242,10 @@ function JoinMessPage() {
     const clean = code.trim().replace(/\D/g, "").slice(0, 6);
     if (clean.length !== 6) return;
 
-    // 1. Try C++ Drogon REST Backend preview
-    cppApi.workspace.previewMess(clean)
-      .then((cppRes) => {
-        if (cppRes.data && !cppRes.error) {
-          setInviteData({
-            id: cppRes.data.id,
-            name: cppRes.data.name,
-            manager: cppRes.data.manager,
-            code: clean,
-            currency: cppRes.data.currency,
-            memberCount: cppRes.data.members?.filter((m) => m.status !== "left").length,
-            timestamp: Date.now(),
-          });
-          if (cppRes.data.members && cppRes.data.members.length > 0) {
-            setMembersList(cppRes.data.members);
-          }
-          toast.success(`Mess found: ${cppRes.data.name}`);
-          return;
-        }
-        throw new Error("C++ backend returned no data");
-      })
-      .catch(() => {
-        // Fallback to server function
-        import("@/lib/mess.functions")
-          .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: clean } }))
-          .then((sRes) => {
+    const fallbackToServer = () => {
+      import("@/lib/mess.functions")
+        .then(({ lookupMessByCodeFn }) => lookupMessByCodeFn({ data: { code: clean } }))
+        .then((sRes) => {
             if (sRes) {
               setInviteData({
                 id: sRes.id,
@@ -307,7 +285,35 @@ function JoinMessPage() {
               toast.error("Mess not found for this 6-digit code. Please check with your mess admin.");
             }
           });
-      });
+    };
+
+    if (cppApi.isAvailable()) {
+      cppApi.workspace.previewMess(clean)
+        .then((cppRes) => {
+          if (cppRes.data && !cppRes.error) {
+            setInviteData({
+              id: cppRes.data.id,
+              name: cppRes.data.name,
+              manager: cppRes.data.manager,
+              code: clean,
+              currency: cppRes.data.currency,
+              memberCount: cppRes.data.members?.filter((m) => m.status !== "left").length,
+              timestamp: Date.now(),
+            });
+            if (cppRes.data.members && cppRes.data.members.length > 0) {
+              setMembersList(cppRes.data.members);
+            }
+            toast.success(`Mess found: ${cppRes.data.name}`);
+            return;
+          }
+          fallbackToServer();
+        })
+        .catch(() => {
+          fallbackToServer();
+        });
+    } else {
+      fallbackToServer();
+    }
   };
 
   // Full invite link for sharing
@@ -491,17 +497,19 @@ function JoinMessPage() {
       }
 
       let guestToken: string | undefined;
-      // 1. Try C++ Drogon REST Backend
-      try {
-        const cppSession = await cppApi.auth.createGuestSession({
-          code: inviteData.code,
-          memberId: memberIdToUse,
-        });
-        if (cppSession.data?.token) {
-          guestToken = cppSession.data.token;
+      // 1. Try C++ Drogon REST Backend (when available)
+      if (cppApi.isAvailable()) {
+        try {
+          const cppSession = await cppApi.auth.createGuestSession({
+            code: inviteData.code,
+            memberId: memberIdToUse,
+          });
+          if (cppSession.data?.token) {
+            guestToken = cppSession.data.token;
+          }
+        } catch {
+          // Fall back to server function
         }
-      } catch {
-        // Fall back to server function
       }
 
       if (!guestToken) {

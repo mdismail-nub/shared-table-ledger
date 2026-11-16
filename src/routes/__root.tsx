@@ -139,12 +139,20 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (!["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"].includes(event)) return;
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
-    });
-    return () => data.subscription.unsubscribe();
+    let unsubscribe: (() => void) | undefined;
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        if (!["SIGNED_IN", "SIGNED_OUT", "USER_UPDATED"].includes(event)) return;
+        router.invalidate();
+        if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+      });
+      unsubscribe = () => data.subscription.unsubscribe();
+    } catch {
+      // Non-fatal if Supabase environment variables are not configured
+    }
+    return () => {
+      unsubscribe?.();
+    };
   }, [router, queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
