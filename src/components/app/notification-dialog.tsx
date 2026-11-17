@@ -37,7 +37,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { useWorkspace } from "@/lib/workspace";
-import { db, useSave, today, formatLocalDate, type NotificationItem } from "@/lib/data";
+import { db, useSave, today, formatLocalDate, getMemberSession, type NotificationItem } from "@/lib/data";
+import { getAdminSession } from "@/lib/mess-store";
 
 export function SendNotificationDialog({
   trigger,
@@ -61,12 +62,13 @@ export function SendNotificationDialog({
 
     if (!title) throw new Error("Please enter a title for the notification.");
     if (!message) throw new Error("Please enter a message.");
-    if (!w.mess?.id) throw new Error("Mess not found.");
+    const activeMessId = w.mess?.id || getAdminSession()?.messId || getMemberSession()?.messId;
+    if (!activeMessId) throw new Error("Mess not found.");
 
     const recipientId = recipient === "" ? null : recipient;
 
     const { error: insertError } = await db.from("mess_notifications").insert({
-      mess_id: w.mess.id,
+      mess_id: activeMessId,
       sender_id: w.own?.id ?? null,
       recipient_id: recipientId,
       title,
@@ -261,7 +263,8 @@ export function MessageAdminDialog({
   const currentPreset = presets.find((p) => p.id === selectedPreset) ?? presets[0]!;
 
   const save = useSave(async () => {
-    if (!w.mess?.id) throw new Error("Mess not found.");
+    const activeMessId = w.mess?.id || getAdminSession()?.messId || getMemberSession()?.messId;
+    if (!activeMessId) throw new Error("Mess not found.");
     if (!w.own) {
       throw new Error("You must be an active, verified member of this mess to send messages.");
     }
@@ -285,7 +288,7 @@ export function MessageAdminDialog({
     }
 
     const payload = {
-      mess_id: w.mess.id,
+      mess_id: activeMessId,
       sender_id: memberId,
       recipient_id: adminMember?.id || w.mess?.owner_id || null,
       title: fullTitle,

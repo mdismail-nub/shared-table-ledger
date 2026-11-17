@@ -583,7 +583,43 @@ export function serverSaveRecord(params: {
       }
     }
   }
-  if (!record) return { error: "Mess not found" };
+  if (!record) {
+    record = {
+      mess: {
+        id: params.messId,
+        name: "Shared Mess",
+        manager: "Manager",
+        address: "",
+        start_day: 1,
+        currency: "BDT (৳)",
+        show_invite_to_members: true,
+        meal_categories: [
+          "Rice",
+          "Vegetables",
+          "Fish & meat",
+          "Eggs",
+          "Cooking oil",
+          "Spices",
+          "Other food",
+        ],
+        household_categories: [
+          "Wi-Fi",
+          "Electricity",
+          "Gas",
+          "Water",
+          "Cleaning",
+          "Other household",
+        ],
+        owner_id: params.auth?.userId || "usr_server",
+      },
+      members: [],
+      meals: [],
+      expenses: [],
+      payments: [],
+      notifications: [],
+    };
+    db.messes[params.messId] = record;
+  }
 
   // Resolve authorization context
   let auth = params.auth;

@@ -129,14 +129,197 @@ export function clearAdminSession() {
   }
 }
 
-export function getStoredMess(messId: string): MessRecord | null {
-  const raw = safeGet(`${MESS_STORE_PREFIX}${messId}`);
+function safeGetMemberSession(): {
+  code?: string;
+  messId?: string;
+  messName?: string;
+  memberId?: string;
+  memberName?: string;
+} | null {
+  const raw = safeGet(MEMBER_SESSION_KEY);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
   } catch {
     return null;
   }
+}
+
+export function getStoredMess(messId: string): MessRecord | null {
+  const raw = safeGet(`${MESS_STORE_PREFIX}${messId}`);
+  if (raw) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // ignore
+    }
+  }
+
+  // Self-healing fallback: If this messId belongs to current admin or member session, construct initial record
+  const admin = getAdminSession();
+  if (admin && (admin.messId === messId || messId === "default")) {
+    const fallbackRecord: MessRecord = {
+      mess: {
+        id: admin.messId,
+        name: "Shared Mess",
+        manager: admin.name || "Manager",
+        address: "",
+        start_day: 1,
+        currency: "BDT (৳)",
+        show_invite_to_members: true,
+        meal_categories: [
+          "Rice",
+          "Vegetables",
+          "Fish & meat",
+          "Eggs",
+          "Cooking oil",
+          "Spices",
+          "Other food",
+        ],
+        household_categories: [
+          "Wi-Fi",
+          "Electricity",
+          "Gas",
+          "Water",
+          "Cleaning",
+          "Other household",
+        ],
+        owner_id: admin.userId,
+      },
+      members: [
+        {
+          id: `mem_${admin.userId}`,
+          user_id: admin.userId,
+          role: "admin",
+          name: admin.name || "Manager",
+          phone: "",
+          room: "",
+          joined: todayDate(),
+          status: "active",
+          tone: "primary",
+        },
+      ],
+      meals: [],
+      expenses: [],
+      payments: [],
+      notifications: [],
+    };
+    saveStoredMess(admin.messId, fallbackRecord);
+    return fallbackRecord;
+  }
+
+  const member = safeGetMemberSession();
+  if (member && (member.messId === messId || member.code === messId)) {
+    const targetId = member.messId || messId;
+    const fallbackRecord: MessRecord = {
+      mess: {
+        id: targetId,
+        name: member.messName || "Shared Mess",
+        manager: "Manager",
+        address: "",
+        start_day: 1,
+        currency: "BDT (৳)",
+        show_invite_to_members: true,
+        meal_categories: [
+          "Rice",
+          "Vegetables",
+          "Fish & meat",
+          "Eggs",
+          "Cooking oil",
+          "Spices",
+          "Other food",
+        ],
+        household_categories: [
+          "Wi-Fi",
+          "Electricity",
+          "Gas",
+          "Water",
+          "Cleaning",
+          "Other household",
+        ],
+        owner_id: "usr_guest",
+      },
+      members: [
+        {
+          id: member.memberId || `mem_${Date.now()}`,
+          user_id: null,
+          role: "member",
+          name: member.memberName || "Member",
+          phone: "",
+          room: "",
+          joined: todayDate(),
+          status: "active",
+          tone: "primary",
+        },
+      ],
+      meals: [],
+      expenses: [],
+      payments: [],
+      notifications: [],
+    };
+    saveStoredMess(targetId, fallbackRecord);
+    return fallbackRecord;
+  }
+
+  return null;
+}
+
+export function ensureStoredMess(messId: string): MessRecord {
+  const existing = getStoredMess(messId);
+  if (existing) return existing;
+
+  const admin = getAdminSession();
+  const member = safeGetMemberSession();
+
+  const record: MessRecord = {
+    mess: {
+      id: messId,
+      name: (admin && admin.messId === messId ? admin.name + "'s Mess" : member?.messName) || "Shared Mess",
+      manager: (admin && admin.messId === messId ? admin.name : "Manager") || "Manager",
+      address: "",
+      start_day: 1,
+      currency: "BDT (৳)",
+      show_invite_to_members: true,
+      meal_categories: [
+        "Rice",
+        "Vegetables",
+        "Fish & meat",
+        "Eggs",
+        "Cooking oil",
+        "Spices",
+        "Other food",
+      ],
+      household_categories: [
+        "Wi-Fi",
+        "Electricity",
+        "Gas",
+        "Water",
+        "Cleaning",
+        "Other household",
+      ],
+      owner_id: admin?.userId || "usr_auto",
+    },
+    members: admin && admin.messId === messId ? [
+      {
+        id: `mem_${admin.userId}`,
+        user_id: admin.userId,
+        role: "admin",
+        name: admin.name || "Manager",
+        phone: "",
+        room: "",
+        joined: todayDate(),
+        status: "active",
+        tone: "primary",
+      }
+    ] : [],
+    meals: [],
+    expenses: [],
+    payments: [],
+    notifications: [],
+  };
+
+  saveStoredMess(messId, record);
+  return record;
 }
 
 export function saveStoredMess(messId: string, record: MessRecord) {
@@ -703,8 +886,7 @@ export function getMessDataByCode(code: string, month: string, memberId?: string
 // ----------------- STORE MUTATION METHODS -----------------
 
 export function addMemberToStore(messId: string, member: Partial<Member>): Member {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  const record = ensureStoredMess(messId);
 
   const tones: Tone[] = ["primary", "mint", "peach", "lime", "cyan"];
   const newMember: Member = {
@@ -729,8 +911,7 @@ export function updateMemberStatusInStore(
   memberId: string,
   status: "active" | "new" | "left",
 ) {
-  const record = getStoredMess(messId);
-  if (!record) return;
+  const record = ensureStoredMess(messId);
   const target = record.members.find((m) => m.id === memberId);
   if (target) {
     target.status = status;
@@ -739,8 +920,7 @@ export function updateMemberStatusInStore(
 }
 
 export function deleteMemberFromStore(messId: string, memberId: string) {
-  const record = getStoredMess(messId);
-  if (!record) return;
+  const record = ensureStoredMess(messId);
   const target = record.members.find((m) => m.id === memberId);
   if (target?.role === "admin") throw new Error("Cannot delete mess administrator.");
   record.members = record.members.filter((m) => m.id !== memberId);
@@ -750,8 +930,7 @@ export function deleteMemberFromStore(messId: string, memberId: string) {
 }
 
 export function upsertMealInStore(messId: string, meal: Partial<Meal>): Meal {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  const record = ensureStoredMess(messId);
 
   const existingIndex = record.meals.findIndex(
     (m) => m.member_id === meal.member_id && m.date === meal.date,
@@ -781,8 +960,7 @@ export function upsertMealInStore(messId: string, meal: Partial<Meal>): Meal {
 }
 
 export function addExpenseToStore(messId: string, expense: Partial<Expense>): Expense {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  const record = ensureStoredMess(messId);
 
   const newExpense: Expense = {
     id: expense.id || `exp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -802,15 +980,13 @@ export function addExpenseToStore(messId: string, expense: Partial<Expense>): Ex
 }
 
 export function deleteExpenseFromStore(messId: string, expenseId: string) {
-  const record = getStoredMess(messId);
-  if (!record) return;
+  const record = ensureStoredMess(messId);
   record.expenses = record.expenses.filter((e) => e.id !== expenseId);
   saveStoredMess(messId, record);
 }
 
 export function addPaymentToStore(messId: string, payment: Partial<Payment>): Payment {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  const record = ensureStoredMess(messId);
 
   const newPayment: Payment = {
     id: payment.id || `pay_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -829,8 +1005,7 @@ export function addPaymentToStore(messId: string, payment: Partial<Payment>): Pa
 }
 
 export function deletePaymentFromStore(messId: string, paymentId: string) {
-  const record = getStoredMess(messId);
-  if (!record) return;
+  const record = ensureStoredMess(messId);
   record.payments = record.payments.filter((p) => p.id !== paymentId);
   saveStoredMess(messId, record);
 }
@@ -839,24 +1014,7 @@ export function addNotificationToStore(
   messId: string,
   notif: Partial<NotificationItem>,
 ): NotificationItem {
-  let record = getStoredMess(messId);
-  if (!record) {
-    const rawIndex = safeGet(MESS_INDEX_KEY);
-    let index: string[] = [];
-    try {
-      index = rawIndex ? JSON.parse(rawIndex) : [];
-    } catch {
-      index = [];
-    }
-    for (const id of index) {
-      const r = getStoredMess(id);
-      const inv = (r?.mess as unknown as { invite_code?: string })?.invite_code;
-      if (inv === messId || id === messId) {
-        record = r;
-        break;
-      }
-    }
-  }
+  const record = ensureStoredMess(messId);
 
   const newNotif: NotificationItem = {
     id: notif.id || `ntf_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -869,26 +1027,22 @@ export function addNotificationToStore(
     created_at: notif.created_at || new Date().toISOString(),
   };
 
-  if (record) {
-    if (!record.notifications.some((n) => n.id === newNotif.id)) {
-      record.notifications.unshift(newNotif);
-      saveStoredMess(record.mess.id, record);
-    }
+  if (!record.notifications.some((n) => n.id === newNotif.id)) {
+    record.notifications.unshift(newNotif);
+    saveStoredMess(record.mess.id, record);
   }
 
   return newNotif;
 }
 
 export function deleteNotificationFromStore(messId: string, notifId: string) {
-  const record = getStoredMess(messId);
-  if (!record) return;
+  const record = ensureStoredMess(messId);
   record.notifications = record.notifications.filter((n) => n.id !== notifId);
   saveStoredMess(messId, record);
 }
 
 export function updateMessSettingsInStore(messId: string, updates: Partial<Mess>): Mess {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  const record = ensureStoredMess(messId);
 
   record.mess = {
     ...record.mess,
@@ -900,8 +1054,7 @@ export function updateMessSettingsInStore(messId: string, updates: Partial<Mess>
 }
 
 export function regenerateInviteCodeInStore(messId: string): string {
-  const record = getStoredMess(messId);
-  if (!record) throw new Error("Mess not found");
+  const record = ensureStoredMess(messId);
 
   const newCode = generateInviteCode();
   (record.mess as unknown as { invite_code: string }).invite_code = newCode;

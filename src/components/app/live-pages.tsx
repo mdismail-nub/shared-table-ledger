@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace";
 import { useSave, db, monthLabel, today, useInviteCode } from "@/lib/data";
+import { getAdminSession } from "@/lib/mess-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1198,7 +1199,8 @@ export function SettingsPage() {
       throw new Error("At least one food/meal category is required.");
     if (household_categories.length === 0)
       throw new Error("At least one household category is required.");
-    if (!w.mess?.id) throw new Error("Mess record not found.");
+    const messId = w.mess?.id || getAdminSession()?.messId;
+    if (!messId) throw new Error("Mess record not found.");
 
     return await db
       .from("messes")
@@ -1210,7 +1212,7 @@ export function SettingsPage() {
         meal_categories,
         household_categories,
       })
-      .eq("id", w.mess.id);
+      .eq("id", messId);
   }, "Settings saved");
 
   const rotate = useSave(async () => await db.rpc("regenerate_invite_code"), "Invitation updated");

@@ -9,6 +9,7 @@ import {
   type QueuedSyncOperation,
 } from "./offline-db";
 import { saveRecordFn } from "./mess.functions";
+import { cppApi } from "./api-client";
 
 type SyncListener = () => void;
 
@@ -80,29 +81,81 @@ export async function executePendingSync(
       try {
         await updateSyncQueueItemStatus(item.id, "syncing");
 
-        // Execute server function
-        const reqData: {
-          messId: string;
-          table: string;
-          action: "insert" | "update" | "upsert" | "delete";
-          payload?: unknown;
-          col?: string;
-          val?: unknown;
-        } = {
-          messId: item.messId,
-          table: item.table,
-          action: item.action,
-        };
-        if (item.payload !== undefined) reqData.payload = item.payload;
-        if (item.col !== undefined) reqData.col = item.col;
-        if (item.val !== undefined) reqData.val = item.val;
+        // Primary: execute directly against C++ backend if available
+        if (cppApi.isAvailable()) {
+          let cppError: string | null = null;
+          if (item.action === "insert") {
+            if (item.table === "mess_expenses") {
+              const res = await cppApi.expenses.add(item.payload as any);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "payments") {
+              const res = await cppApi.payments.record(item.payload as any);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "mess_members") {
+              const res = await cppApi.members.add(item.payload as any);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "mess_notifications") {
+              const res = await cppApi.notifications.send(item.payload as any);
+              if (res.error) cppError = res.error;
+            }
+          } else if (item.action === "upsert") {
+            if (item.table === "mess_meals") {
+              const meals = Array.isArray(item.payload) ? item.payload : [item.payload];
+              const res = await cppApi.meals.upsertDaily(meals as any);
+              if (res.error) cppError = res.error;
+            }
+          } else if (item.action === "update") {
+            if (item.table === "mess_members" && item.col === "id") {
+              const res = await cppApi.members.updateStatus(String(item.val), (item.payload as any)?.status);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "messes") {
+              const res = await cppApi.settings.update(item.payload as any);
+              if (res.error) cppError = res.error;
+            }
+          } else if (item.action === "delete") {
+            const targetId = String(item.val || (item.payload as any)?.id);
+            if (item.table === "mess_members") {
+              const res = await cppApi.members.delete(targetId);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "mess_expenses") {
+              const res = await cppApi.expenses.delete(targetId);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "payments") {
+              const res = await cppApi.payments.delete(targetId);
+              if (res.error) cppError = res.error;
+            } else if (item.table === "mess_notifications") {
+              const res = await cppApi.notifications.delete(targetId);
+              if (res.error) cppError = res.error;
+            }
+          }
 
-        const res = await saveRecordFn({
-          data: reqData,
-        });
+          if (cppError) {
+            throw new Error(cppError);
+          }
+        } else {
+          const reqData: {
+            messId: string;
+            table: string;
+            action: "insert" | "update" | "upsert" | "delete";
+            payload?: unknown;
+            col?: string;
+            val?: unknown;
+          } = {
+            messId: item.messId,
+            table: item.table,
+            action: item.action,
+          };
+          if (item.payload !== undefined) reqData.payload = item.payload;
+          if (item.col !== undefined) reqData.col = item.col;
+          if (item.val !== undefined) reqData.val = item.val;
 
-        if (res && (res as { error?: string }).error) {
-          throw new Error((res as { error?: string }).error);
+          const res = await saveRecordFn({
+            data: reqData,
+          });
+
+          if (res && (res as { error?: string }).error) {
+            throw new Error((res as { error?: string }).error);
+          }
         }
 
         // Successfully synced

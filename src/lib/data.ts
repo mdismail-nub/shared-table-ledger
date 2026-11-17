@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
-import { cppApi } from "./api-client";
+import { cppApi, isNetworkOrConnectionError } from "./api-client";
 import { buildLedger, mealRate } from "./accounting";
 import type { Tone } from "@/components/app/ui";
 import {
@@ -22,6 +22,7 @@ import {
   addNotificationToStore,
   deleteNotificationFromStore,
   getStoredMess,
+  ensureStoredMess,
   updateMessSettingsInStore,
   regenerateInviteCodeInStore,
 } from "./mess-store";
@@ -357,12 +358,20 @@ export function useMembers() {
       const adminSession = getAdminSession();
       if (adminSession) {
         const data = getMessDataById(adminSession.messId, currentMonth());
-        if (data?.members) return data.members;
+        if (data?.members && data.members.length > 0) return data.members;
       }
       const memberSession = getMemberSession();
       if (memberSession?.code) {
         const data = getMessDataByCode(memberSession.code, currentMonth());
-        if (data?.members) return data.members;
+        if (data?.members && data.members.length > 0) return data.members;
+      }
+      if (cppApi.isAvailable()) {
+        try {
+          const cppRes = await cppApi.members.list();
+          if (cppRes.data && !cppRes.error) return cppRes.data;
+        } catch {
+          // ignore
+        }
       }
       const { data, error } = await supabase.from("mess_members").select("*").order("created_at");
       if (error) throw error;
@@ -383,6 +392,14 @@ export function useMeals(month: string) {
       if (memberSession?.code) {
         const data = getMessDataByCode(memberSession.code, month);
         if (data?.meals) return data.meals;
+      }
+      if (cppApi.isAvailable()) {
+        try {
+          const cppRes = await cppApi.meals.list(month);
+          if (cppRes.data && !cppRes.error) return cppRes.data;
+        } catch {
+          // ignore
+        }
       }
       const { start, end } = monthRange(month);
       const { data, error } = await supabase
@@ -409,6 +426,14 @@ export function useExpenses(month: string) {
       if (memberSession?.code) {
         const data = getMessDataByCode(memberSession.code, month);
         if (data?.expenses) return data.expenses;
+      }
+      if (cppApi.isAvailable()) {
+        try {
+          const cppRes = await cppApi.expenses.list(month);
+          if (cppRes.data && !cppRes.error) return cppRes.data;
+        } catch {
+          // ignore
+        }
       }
       const { start, end } = monthRange(month);
       const { data, error } = await supabase
@@ -437,6 +462,14 @@ export function usePayments(month: string) {
         const data = getMessDataByCode(memberSession.code, month);
         if (data?.payments) return data.payments;
       }
+      if (cppApi.isAvailable()) {
+        try {
+          const cppRes = await cppApi.payments.list(month);
+          if (cppRes.data && !cppRes.error) return cppRes.data;
+        } catch {
+          // ignore
+        }
+      }
       const { start, end } = monthRange(month);
       const { data, error } = await supabase
         .from("payments")
@@ -460,6 +493,14 @@ async function fetchSummary(month: string): Promise<Summary> {
   if (memberSession?.code) {
     const data = getMessDataByCode(memberSession.code, month);
     if (data?.summary) return data.summary;
+  }
+  if (cppApi.isAvailable()) {
+    try {
+      const cppRes = await cppApi.accounting.getSummary(month);
+      if (cppRes.data && !cppRes.error) return cppRes.data;
+    } catch {
+      // ignore
+    }
   }
   const { start, end } = monthRange(month);
   const { data, error } = await supabase.rpc("mess_month_summary", { _start: start, _end: end });
@@ -624,13 +665,137 @@ const storeDb = {
     },
 
     insert: async (payload: AnyData) => {
-      // 1. Unified notification handler for both admin and member
+      const admin = getAdminSession();
+      const member = getMemberSession();
+      const messId = payload?.mess_id || admin?.messId || member?.messId;
+
+      // 1. Primary: C++ Drogon REST Backend (when available)
+      if (cppApi.isAvailable()) {
+        try {
+          if (table === "mess_expenses") {
+            const expenseData = {
+              date: payload.date || today(),
+              type: (payload.type as "meal" | "household") || "meal",
+              category: payload.category || "General",
+              description: payload.description || "",
+              amount: Number(payload.amount || 0),
+              member_id: payload.member_id || null,
+              method: payload.method || "Cash",
+            };
+            const cppRes = await cppApi.expenses.add(expenseData);
+            if (cppRes.error) {
+              return { data: null, error: { message: cppRes.error } };
+            }
+            const added: Expense = {
+              id: cppRes.data?.id || payload.id || `exp_${Date.now()}`,
+              ...expenseData,
+              created_at: payload.created_at || new Date().toISOString(),
+            };
+            if (messId) {
+              try {
+                addExpenseToStore(messId, added);
+              } catch {
+                // ignore
+              }
+            }
+            return { data: added, error: null };
+          }
+
+          if (table === "payments") {
+            const paymentData = {
+              date: payload.date || today(),
+              member_id: payload.member_id,
+              amount: Number(payload.amount || 0),
+              method: payload.method || "Cash",
+              reference: payload.reference || "",
+            };
+            const cppRes = await cppApi.payments.record(paymentData);
+            if (cppRes.error) {
+              return { data: null, error: { message: cppRes.error } };
+            }
+            const added: Payment = {
+              id: cppRes.data?.id || payload.id || `pay_${Date.now()}`,
+              ...paymentData,
+              kind: payload.kind || "Deposit",
+              created_at: payload.created_at || new Date().toISOString(),
+            };
+            if (messId) {
+              try {
+                addPaymentToStore(messId, added);
+              } catch {
+                // ignore
+              }
+            }
+            return { data: added, error: null };
+          }
+
+          if (table === "mess_members") {
+            const memberData = {
+              name: (payload.name || "").trim(),
+              phone: (payload.phone || "").trim(),
+              room: (payload.room || "").trim(),
+            };
+            const cppRes = await cppApi.members.add(memberData);
+            if (cppRes.error) {
+              return { data: null, error: { message: cppRes.error } };
+            }
+            const added: Member = {
+              id: cppRes.data?.id || payload.id || `mem_${Date.now()}`,
+              user_id: payload.user_id ?? null,
+              role: payload.role || "member",
+              ...memberData,
+              joined: payload.joined || today(),
+              status: (payload.status as "active" | "new" | "left") || "active",
+              tone: payload.tone || "primary",
+            };
+            if (messId) {
+              try {
+                addMemberToStore(messId, added);
+              } catch {
+                // ignore
+              }
+            }
+            return { data: added, error: null };
+          }
+
+          if (table === "mess_notifications") {
+            const notifData = {
+              title: payload.title || "Notice",
+              message: payload.message || "",
+              type: payload.type || "notice",
+              recipient_id: payload.recipient_id ?? null,
+            };
+            const cppRes = await cppApi.notifications.send(notifData);
+            if (cppRes.error) {
+              return { data: null, error: { message: cppRes.error } };
+            }
+            const item: NotificationItem = {
+              id: cppRes.data?.id || payload.id || `ntf_${Date.now()}`,
+              mess_id: messId || "",
+              sender_id: payload.sender_id ?? (admin ? admin.userId : member?.memberId) ?? null,
+              ...notifData,
+              created_at: payload.created_at || new Date().toISOString(),
+            };
+            if (messId) {
+              try {
+                addNotificationToStore(messId, item);
+              } catch {
+                // ignore
+              }
+            }
+            return { data: item, error: null };
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : `Failed to save ${table}`;
+          if (!isNetworkOrConnectionError(msg)) {
+            return { data: null, error: { message: msg } };
+          }
+        }
+      }
+
+      // 2. Offline / Mock fallback path
       if (table === "mess_notifications") {
         const notifPayload = payload as Partial<NotificationItem>;
-        const admin = getAdminSession();
-        const member = getMemberSession();
-        const messId = notifPayload.mess_id || admin?.messId || member?.messId;
-
         if (messId) {
           const item: NotificationItem = {
             id: notifPayload.id || `ntf_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -643,14 +808,12 @@ const storeDb = {
             created_at: notifPayload.created_at || new Date().toISOString(),
           };
 
-          // 1. Save to local storage
           try {
             addNotificationToStore(messId, item);
           } catch {
             // ignore
           }
 
-          // 2. Direct server save (online primary path)
           let serverOk = false;
           try {
             const { saveRecordFn } = await import("./mess.functions");
@@ -683,7 +846,6 @@ const storeDb = {
             }
           }
 
-          // 3. Offline sync queue ONLY if server was unreachable due to network connectivity
           if (!serverOk) {
             const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             await enqueueSyncOperation({
@@ -705,25 +867,23 @@ const storeDb = {
         }
       }
 
-      const admin = getAdminSession();
-      if (admin) {
+      if (admin && messId) {
         let added: AnyData = null;
         if (table === "mess_members") {
-          added = addMemberToStore(admin.messId, payload);
+          added = addMemberToStore(messId, payload);
         } else if (table === "mess_expenses") {
-          added = addExpenseToStore(admin.messId, payload);
+          added = addExpenseToStore(messId, payload);
         } else if (table === "payments") {
-          added = addPaymentToStore(admin.messId, payload);
+          added = addPaymentToStore(messId, payload);
         }
 
         if (added) {
-          // Direct server save
           let serverOk = false;
           try {
             const { saveRecordFn } = await import("./mess.functions");
             const sRes = await saveRecordFn({
               data: {
-                messId: admin.messId,
+                messId,
                 table,
                 action: "insert",
                 payload: added,
@@ -754,14 +914,14 @@ const storeDb = {
             const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             await enqueueSyncOperation({
               uuid,
-              messId: admin.messId,
+              messId,
               table,
               action: "insert",
               payload: added,
             });
 
             if (typeof navigator !== "undefined" && navigator.onLine) {
-              executePendingSync(admin.messId).catch(() => {});
+              executePendingSync(messId).catch(() => {});
             } else {
               registerBackgroundSync();
             }
@@ -776,25 +936,64 @@ const storeDb = {
 
     upsert: async (payload: AnyData, _opts?: AnyData) => {
       const admin = getAdminSession();
-      if (admin && table === "mess_meals") {
-        const items = Array.isArray(payload) ? payload : [payload];
-        const results = items.map((item) => upsertMealInStore(admin.messId, item));
-        for (const item of results) {
-          const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-          await enqueueSyncOperation({
-            uuid,
-            messId: admin.messId,
-            table: "mess_meals",
-            action: "upsert",
-            payload: item,
-          });
+      const member = getMemberSession();
+      const messId = admin?.messId || member?.messId;
+
+      if (table === "mess_meals") {
+        const rawItems = Array.isArray(payload) ? payload : [payload];
+        const meals: Meal[] = rawItems.map((item) => ({
+          id: item.id || `ml_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          member_id: item.member_id,
+          date: item.date,
+          breakfast: Number(item.breakfast ?? 0),
+          lunch: Number(item.lunch ?? 0),
+          dinner: Number(item.dinner ?? 0),
+        }));
+
+        if (cppApi.isAvailable()) {
+          try {
+            const cppRes = await cppApi.meals.upsertDaily(meals);
+            if (cppRes.error) {
+              return { data: null, error: { message: cppRes.error } };
+            }
+            if (messId) {
+              try {
+                for (const m of meals) {
+                  upsertMealInStore(messId, m);
+                }
+              } catch {
+                // ignore
+              }
+            }
+            return { data: meals, error: null };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "C++ meal update failed";
+            if (!isNetworkOrConnectionError(msg)) {
+              return { data: null, error: { message: msg } };
+            }
+          }
         }
-        if (typeof navigator !== "undefined" && navigator.onLine) {
-          executePendingSync(admin.messId).catch(() => {});
-        } else {
-          registerBackgroundSync();
+
+        // Offline / fallback path
+        if (messId) {
+          const results = meals.map((item) => upsertMealInStore(messId, item));
+          for (const item of results) {
+            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            await enqueueSyncOperation({
+              uuid,
+              messId,
+              table: "mess_meals",
+              action: "upsert",
+              payload: item,
+            });
+          }
+          if (typeof navigator !== "undefined" && navigator.onLine) {
+            executePendingSync(messId).catch(() => {});
+          } else {
+            registerBackgroundSync();
+          }
+          return { data: results, error: null };
         }
-        return { data: results, error: null };
       }
       return (supabase.from(table as AnyData) as AnyData).upsert(payload, _opts);
     },
@@ -802,13 +1001,38 @@ const storeDb = {
     update: (payload: AnyData) => ({
       eq: async (col: string, val: AnyData) => {
         const admin = getAdminSession();
-        if (admin) {
-          if (table === "mess_members" && col === "id") {
-            updateMemberStatusInStore(admin.messId, val, payload.status);
+        const member = getMemberSession();
+        const messId = admin?.messId || member?.messId;
+
+        if (table === "mess_members" && col === "id") {
+          if (cppApi.isAvailable()) {
+            try {
+              const cppRes = await cppApi.members.updateStatus(String(val), payload.status);
+              if (cppRes.error) {
+                return { data: null, error: { message: cppRes.error } };
+              }
+              if (messId) {
+                try {
+                  updateMemberStatusInStore(messId, String(val), payload.status);
+                } catch {
+                  // ignore
+                }
+              }
+              return { data: null, error: null };
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "C++ status update failed";
+              if (!isNetworkOrConnectionError(msg)) {
+                return { data: null, error: { message: msg } };
+              }
+            }
+          }
+
+          if (messId) {
+            updateMemberStatusInStore(messId, val, payload.status);
             const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             await enqueueSyncOperation({
               uuid,
-              messId: admin.messId,
+              messId,
               table: "mess_members",
               action: "update",
               payload,
@@ -816,24 +1040,49 @@ const storeDb = {
               val,
             });
             if (typeof navigator !== "undefined" && navigator.onLine) {
-              executePendingSync(admin.messId).catch(() => {});
+              executePendingSync(messId).catch(() => {});
             } else {
               registerBackgroundSync();
             }
             return { data: null, error: null };
           }
-          if (table === "messes") {
-            const updated = updateMessSettingsInStore(admin.messId, payload);
+        }
+
+        if (table === "messes") {
+          if (cppApi.isAvailable()) {
+            try {
+              const cppRes = await cppApi.settings.update(payload);
+              if (cppRes.error) {
+                return { data: null, error: { message: cppRes.error } };
+              }
+              if (messId) {
+                try {
+                  updateMessSettingsInStore(messId, payload);
+                } catch {
+                  // ignore
+                }
+              }
+              return { data: payload, error: null };
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "C++ settings update failed";
+              if (!isNetworkOrConnectionError(msg)) {
+                return { data: null, error: { message: msg } };
+              }
+            }
+          }
+
+          if (messId) {
+            const updated = updateMessSettingsInStore(messId, payload);
             const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
             await enqueueSyncOperation({
               uuid,
-              messId: admin.messId,
+              messId,
               table: "messes",
               action: "update",
               payload,
             });
             if (typeof navigator !== "undefined" && navigator.onLine) {
-              executePendingSync(admin.messId).catch(() => {});
+              executePendingSync(messId).catch(() => {});
             } else {
               registerBackgroundSync();
             }
@@ -846,16 +1095,58 @@ const storeDb = {
 
     delete: () => ({
       eq: async (col: string, val: AnyData) => {
-        // Dedicated notification deletion
-        if (col === "id" && table === "mess_notifications") {
-          const admin = getAdminSession();
-          const member = getMemberSession();
-          const messId = admin?.messId || member?.messId;
+        const admin = getAdminSession();
+        const member = getMemberSession();
+        const messId = admin?.messId || member?.messId;
 
+        if (col === "id") {
+          // 1. Primary: C++ Drogon REST Backend (when available)
+          if (cppApi.isAvailable()) {
+            try {
+              let cppRes: { data: unknown; error: string | null } = { data: null, error: null };
+              if (table === "mess_members") {
+                cppRes = await cppApi.members.delete(String(val));
+              } else if (table === "mess_expenses") {
+                cppRes = await cppApi.expenses.delete(String(val));
+              } else if (table === "payments") {
+                cppRes = await cppApi.payments.delete(String(val));
+              } else if (table === "mess_notifications") {
+                cppRes = await cppApi.notifications.delete(String(val));
+              }
+              if (cppRes.error) {
+                return { data: null, error: { message: cppRes.error } };
+              }
+              if (messId) {
+                try {
+                  if (table === "mess_members") deleteMemberFromStore(messId, String(val));
+                  else if (table === "mess_expenses") deleteExpenseFromStore(messId, String(val));
+                  else if (table === "payments") deletePaymentFromStore(messId, String(val));
+                  else if (table === "mess_notifications") deleteNotificationFromStore(messId, String(val));
+                } catch {
+                  // ignore
+                }
+              }
+              return { data: null, error: null };
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "C++ delete failed";
+              if (!isNetworkOrConnectionError(msg)) {
+                return { data: null, error: { message: msg } };
+              }
+            }
+          }
+
+          // 2. Offline / Mock fallback path
           if (messId) {
-            deleteNotificationFromStore(messId, val);
+            if (table === "mess_members") {
+              deleteMemberFromStore(messId, val);
+            } else if (table === "mess_expenses") {
+              deleteExpenseFromStore(messId, val);
+            } else if (table === "payments") {
+              deletePaymentFromStore(messId, val);
+            } else if (table === "mess_notifications") {
+              deleteNotificationFromStore(messId, val);
+            }
 
-            // If an insert/update was pending offline, cancel it so replay cannot resurrect it
             const cancelled = await cancelPendingOperationsForEntity(table, val);
             if (cancelled > 0) {
               return { data: null, error: null };
@@ -867,7 +1158,7 @@ const storeDb = {
               const sRes = await saveRecordFn({
                 data: {
                   messId,
-                  table: "mess_notifications",
+                  table,
                   action: "delete",
                   col: "id",
                   val,
@@ -889,7 +1180,7 @@ const storeDb = {
                     err.name === "TypeError"));
 
               if (!isOffline) {
-                const message = err instanceof Error ? err.message : "Failed to delete notification";
+                const message = err instanceof Error ? err.message : `Failed to delete from ${table}`;
                 return { data: null, error: { message } };
               }
             }
@@ -899,11 +1190,12 @@ const storeDb = {
               await enqueueSyncOperation({
                 uuid,
                 messId,
-                table: "mess_notifications",
+                table,
                 action: "delete",
                 col: "id",
                 val,
               });
+
               if (typeof navigator !== "undefined" && navigator.onLine) {
                 executePendingSync(messId).catch(() => {});
               } else {
@@ -913,78 +1205,6 @@ const storeDb = {
 
             return { data: null, error: null };
           }
-        }
-
-        const admin = getAdminSession();
-        if (admin && col === "id") {
-          if (table === "mess_members") {
-            deleteMemberFromStore(admin.messId, val);
-          } else if (table === "mess_expenses") {
-            deleteExpenseFromStore(admin.messId, val);
-          } else if (table === "payments") {
-            deletePaymentFromStore(admin.messId, val);
-          } else if (table === "mess_notifications") {
-            deleteNotificationFromStore(admin.messId, val);
-          }
-
-          // If an insert/update was pending offline, cancel it so replay cannot resurrect it
-          const cancelled = await cancelPendingOperationsForEntity(table, val);
-          if (cancelled > 0) {
-            return { data: null, error: null };
-          }
-
-          let serverOk = false;
-          try {
-            const { saveRecordFn } = await import("./mess.functions");
-            const sRes = await saveRecordFn({
-              data: {
-                messId: admin.messId,
-                table,
-                action: "delete",
-                col: "id",
-                val,
-                token: admin.token,
-              },
-            });
-            if (sRes && (sRes as { error?: string }).error) {
-              return { data: null, error: { message: (sRes as { error: string }).error! } };
-            }
-            if (sRes && !(sRes as { error?: string }).error) {
-              serverOk = true;
-            }
-          } catch (err) {
-            const isOffline =
-              (typeof navigator !== "undefined" && !navigator.onLine) ||
-              (err instanceof Error &&
-                (err.message.includes("Failed to fetch") ||
-                  err.message.includes("NetworkError") ||
-                  err.name === "TypeError"));
-
-            if (!isOffline) {
-              const message = err instanceof Error ? err.message : `Failed to delete from ${table}`;
-              return { data: null, error: { message } };
-            }
-          }
-
-          if (!serverOk) {
-            const uuid = `op_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-            await enqueueSyncOperation({
-              uuid,
-              messId: admin.messId,
-              table,
-              action: "delete",
-              col: "id",
-              val,
-            });
-
-            if (typeof navigator !== "undefined" && navigator.onLine) {
-              executePendingSync(admin.messId).catch(() => {});
-            } else {
-              registerBackgroundSync();
-            }
-          }
-
-          return { data: null, error: null };
         }
 
         return (supabase.from(table as AnyData) as AnyData).delete().eq(col, val);

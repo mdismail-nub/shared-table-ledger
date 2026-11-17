@@ -49,6 +49,15 @@ export const workspaceOptions = (month = currentMonth()) =>
               memberSession.token,
             );
             if (cppRes.data && !cppRes.error) {
+              const fullRecord = {
+                mess: cppRes.data.mess,
+                members: (cppRes.data.members ?? []) as Member[],
+                meals: (cppRes.data.meals ?? []) as Meal[],
+                expenses: (cppRes.data.expenses ?? []) as Expense[],
+                payments: (cppRes.data.payments ?? []) as Payment[],
+                notifications: (cppRes.data.notifications ?? []) as NotificationItem[],
+              };
+              saveStoredMess(cppRes.data.mess.id, fullRecord);
               cacheWorkspaceToIndexedDB(cppRes.data.mess.id, month, cppRes.data).catch(() => {});
               return cppRes.data;
             }
@@ -195,6 +204,18 @@ export const workspaceOptions = (month = currentMonth()) =>
           try {
             const cppRes = await cppApi.workspace.getWorkspace(month);
             if (cppRes.data && !cppRes.error) {
+              const fullRecord = {
+                mess: cppRes.data.mess,
+                members: (cppRes.data.members ?? []) as Member[],
+                meals: (cppRes.data.meals ?? []) as Meal[],
+                expenses: (cppRes.data.expenses ?? []) as Expense[],
+                payments: (cppRes.data.payments ?? []) as Payment[],
+                notifications: (cppRes.data.notifications ?? []) as NotificationItem[],
+              };
+              saveStoredMess(adminSession.messId, fullRecord);
+              if (cppRes.data.mess?.id && cppRes.data.mess.id !== adminSession.messId) {
+                saveStoredMess(cppRes.data.mess.id, fullRecord);
+              }
               cacheWorkspaceToIndexedDB(adminSession.messId, month, cppRes.data).catch(() => {});
               return cppRes.data;
             }
