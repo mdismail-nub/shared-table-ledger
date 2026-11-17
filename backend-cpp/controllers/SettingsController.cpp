@@ -23,7 +23,7 @@ void SettingsController::updateSettings(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     auto json = req->getJsonObject();
     if (!json) {
         auto resp = drogon::HttpResponse::newHttpJsonResponse(Json::Value([]() {
@@ -117,7 +117,7 @@ void SettingsController::regenerateCode(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string newCode = utils::Crypto::generateInviteCode();
 
     bool ok = repositories::DatabaseManager::instance().regenerateInviteCode(messId, newCode);
@@ -134,7 +134,6 @@ void SettingsController::regenerateCode(
     okVal["success"] = true;
     okVal["code"] = newCode;
     auto resp = drogon::HttpResponse::newHttpJsonResponse(okVal);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 

@@ -31,9 +31,11 @@ if(Drogon_FOUND)
     message(STATUS "Drogon found: ${Drogon_DIR}")
     add_compile_definitions(HAVE_DROGON=1)
     set(DROGON_LINK_LIBS Drogon::Drogon)
+    set(DROGON_COMPAT_INCLUDE_DIRS "")
 else()
     message(STATUS "Drogon not installed globally. Using embedded Drogon-compatible framework.")
     set(DROGON_LINK_LIBS "")
+    set(DROGON_COMPAT_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include/drogon_compat)
 endif()
 
 include(FetchContent)
@@ -57,7 +59,7 @@ endif()
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${DROGON_COMPAT_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/models
     ${CMAKE_CURRENT_SOURCE_DIR}/services
     ${CMAKE_CURRENT_SOURCE_DIR}/repositories

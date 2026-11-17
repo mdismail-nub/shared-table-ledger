@@ -27,13 +27,13 @@ void WorkspaceController::getWorkspace(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string month = req->getParameter("month");
     if (month.empty() || !utils::DateUtils::isValidMonth(month)) {
         month = utils::DateUtils::getCurrentMonth();
     }
 
-    auto claims = req->getAttributes()->get<utils::JwtClaims>("claims");
+    auto claims = req->attributes()->get<utils::JwtClaims>("claims");
     auto wsOpt = services::WorkspaceService::getWorkspace(messId, month, claims);
 
     if (!wsOpt.has_value()) {
@@ -41,13 +41,11 @@ void WorkspaceController::getWorkspace(
             Json::Value v; v["error"] = "Workspace not found"; return v;
         }()));
         resp->setStatusCode(drogon::k404NotFound);
-        resp->addHeader("Access-Control-Allow-Origin", "*");
         callback(resp);
         return;
     }
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(wsOpt->toJson());
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 

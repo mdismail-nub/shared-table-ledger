@@ -22,7 +22,7 @@ void ReportController::getCsvReport(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string month = req->getParameter("month");
     if (month.empty() || !utils::DateUtils::isValidMonth(month)) {
         month = utils::DateUtils::getCurrentMonth();
@@ -35,7 +35,6 @@ void ReportController::getCsvReport(
     resp->setContentTypeCode(drogon::ContentType::CT_TEXT_PLAIN);
     resp->addHeader("Content-Type", "text/csv; charset=utf-8");
     resp->addHeader("Content-Disposition", "attachment; filename=\"mess-manager-" + month + ".csv\"");
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     resp->setBody(std::move(csvData));
     callback(resp);
 }

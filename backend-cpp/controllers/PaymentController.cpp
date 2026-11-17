@@ -22,7 +22,7 @@ void PaymentController::getPayments(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string month = req->getParameter("month");
     if (month.empty() || !utils::DateUtils::isValidMonth(month)) {
         month = utils::DateUtils::getCurrentMonth();
@@ -33,7 +33,6 @@ void PaymentController::getPayments(
     for (const auto &p : payments) arr.append(p.toJson());
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(arr);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 
@@ -41,7 +40,7 @@ void PaymentController::addPayment(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     auto json = req->getJsonObject();
     if (!json) {
         auto resp = drogon::HttpResponse::newHttpJsonResponse(Json::Value([]() {

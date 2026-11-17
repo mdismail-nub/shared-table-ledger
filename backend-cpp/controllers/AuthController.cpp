@@ -1,5 +1,6 @@
 #include "AuthController.h"
 #include "../services/AuthService.h"
+#include "../repositories/DatabaseManager.h"
 #include "../validators/InputValidator.h"
 #include <drogon/drogon.h>
 
@@ -188,7 +189,37 @@ void AuthController::createGuestSession(
     }
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(sessionOpt->toJson());
-    resp->addHeader("Access-Control-Allow-Origin", "*");
+    callback(resp);
+}
+
+void AuthController::me(
+    const drogon::HttpRequestPtr &req,
+    std::function<void(const drogon::HttpResponsePtr &)> &&callback
+) {
+    std::string userId = req->attributes()->get<std::string>("userId");
+    std::string role = req->attributes()->get<std::string>("role");
+    std::string messId = req->attributes()->get<std::string>("messId");
+    std::optional<std::string> memberId;
+    if (req->attributes()->find("memberId")) {
+        memberId = req->attributes()->get<std::string>("memberId");
+    }
+
+    auto &db = repositories::DatabaseManager::instance();
+    auto userOpt = db.getUserById(userId);
+
+    Json::Value root;
+    root["id"] = userId;
+    root["role"] = role;
+    root["mess_id"] = messId;
+    if (memberId.has_value()) {
+        root["member_id"] = *memberId;
+    }
+    if (userOpt.has_value()) {
+        root["email"] = userOpt->email;
+        root["name"] = userOpt->name;
+    }
+
+    auto resp = drogon::HttpResponse::newHttpJsonResponse(root);
     callback(resp);
 }
 

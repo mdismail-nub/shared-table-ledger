@@ -11,7 +11,7 @@ FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install all C++ build tools, libpq-dev, OpenSSL, and Drogon dependencies
+# Install C++ build toolchain, libpq-dev, OpenSSL, and Drogon dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -24,26 +24,48 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Build and install Drogon C++ Framework (v1.9.8) with PostgreSQL support
+# Build and install real Drogon C++ Framework (v1.9.8) with PostgreSQL support
+# Use sequential build (-j1) to prevent Out-Of-Memory (OOM) kills on cloud builder tiers
 RUN git clone --depth 1 --branch v1.9.8 https://github.com/drogonframework/drogon.git /tmp/drogon \
     && cd /tmp/drogon \
     && git submodule update --init \
-    && cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_EXAMPLES=OFF -DBUILD_CTL=OFF \
-    && cmake --build build -j$(nproc) \
+    && cmake -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_POSTGRESQL=ON \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_CTL=OFF \
+        -DBUILD_TESTING=OFF \
+    && cmake --build build -j1 \
     && cmake --install build \
     && rm -rf /tmp/drogon
 
+# Stage build context: automatically handle both repository root context (.)
+# and backend-cpp/ subdirectory context seamlessly
+WORKDIR /tmp/context
+COPY . .
+RUN if [ -d "backend-cpp" ]; then \
+        mkdir -p /src && cp -a backend-cpp/* /src/ ; \
+    else \
+        mkdir -p /src && cp -a ./* /src/ ; \
+    fi && rm -rf /tmp/context
+
 WORKDIR /src
 
-# Copy backend C++ source code
-COPY . .
-
-# Configure and compile release binaries
+# Configure and compile release binaries using real Drogon (-j2)
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build --config Release -j$(nproc)
+    && cmake --build build --config Release -j2
+
+# Guarantee binary exists at standard path for multi-stage copy
+RUN if [ ! -f /src/build/mess_manager_server ]; then \
+        find /src/build -name mess_manager_server -type f -exec cp {} /src/build/mess_manager_server \; ; \
+    fi
 
 # Execute automated tests during container build to guarantee 100% test pass
-RUN if [ -f ./build/mess_manager_tests ]; then ./build/mess_manager_tests; fi
+RUN if [ -f ./build/mess_manager_tests ]; then \
+        ./build/mess_manager_tests; \
+    else \
+        find ./build -name mess_manager_tests -type f -exec {} \; ; \
+    fi
 
 # ------------------------------------------------------------------------------
 # Stage 2: Minimal Production Runtime
@@ -61,7 +83,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Run as non-privileged security user
+# Run as non-privileged security user (UID 1001)
 RUN groupadd -g 1001 appgroup && \
     useradd -u 1001 -g appgroup -m -s /bin/bash appuser
 
@@ -69,9 +91,7 @@ WORKDIR /app
 
 # Copy compiled backend executable from builder stage
 COPY --from=builder --chown=appuser:appgroup /src/build/mess_manager_server /app/mess_manager_server
-RUN if [ ! -f /app/mess_manager_server ]; then \
-        find /src/build -name mess_manager_server -exec cp {} /app/mess_manager_server \; ; \
-    fi && chmod +x /app/mess_manager_server
+RUN chmod +x /app/mess_manager_server
 
 # Copy migrations and configuration files
 COPY --from=builder --chown=appuser:appgroup /src/migrations /app/migrations

@@ -9,18 +9,9 @@
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "HttpFilter.h"
+#include "HttpAppFramework.h"
 
 namespace drogon {
-
-struct RouteEntry {
-    std::string path;
-    HttpMethod method;
-    std::vector<std::string> filters;
-    std::function<void(const HttpRequestPtr &, std::function<void(const HttpResponsePtr &)> &&, const std::vector<std::string> &)> handler;
-};
-
-class HttpAppFramework;
-HttpAppFramework &app();
 
 template<typename Controller, typename Func>
 inline void registerRouteHelper(Func func, const std::string &path, drogon::HttpMethod method, const std::vector<std::string> &filters) {

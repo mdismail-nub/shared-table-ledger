@@ -23,7 +23,7 @@ void AccountingController::getLedger(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string month = req->getParameter("month");
     if (month.empty() || !utils::DateUtils::isValidMonth(month)) {
         month = utils::DateUtils::getCurrentMonth();
@@ -46,7 +46,6 @@ void AccountingController::getLedger(
     for (const auto &row : ledger) arr.append(row.toJson());
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(arr);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 
@@ -54,7 +53,7 @@ void AccountingController::getSummary(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string month = req->getParameter("month");
     if (month.empty() || !utils::DateUtils::isValidMonth(month)) {
         month = utils::DateUtils::getCurrentMonth();
@@ -71,7 +70,6 @@ void AccountingController::getSummary(
     auto summary = services::AccountingEngine::generateSummary(expenses, meals, payments, members);
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(summary.toJson());
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 
@@ -80,7 +78,7 @@ void AccountingController::getStatement(
     std::function<void(const drogon::HttpResponsePtr &)> &&callback,
     const std::string &memberId
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     std::string month = req->getParameter("month");
     if (month.empty() || !utils::DateUtils::isValidMonth(month)) {
         month = utils::DateUtils::getCurrentMonth();

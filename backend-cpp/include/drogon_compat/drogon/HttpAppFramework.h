@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <functional>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -27,6 +28,7 @@ using socket_t = SOCKET;
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <cxxabi.h>
 using socket_t = int;
 #define IS_INVALID_SOCKET(s) ((s) < 0)
 #define CLOSE_SOCKET(s) close(s)
@@ -36,9 +38,41 @@ using socket_t = int;
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "HttpFilter.h"
-#include "HttpController.h"
+#include <trantor/utils/Logger.h>
 
 namespace drogon {
+
+namespace utils {
+inline std::string demangle(const char *name) {
+#ifdef _MSC_VER
+    std::string s = name;
+    if (s.rfind("class ", 0) == 0) s = s.substr(6);
+    else if (s.rfind("struct ", 0) == 0) s = s.substr(7);
+    return s;
+#else
+    int status = 0;
+    char *demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+    if (status == 0 && demangled) {
+        std::string res = demangled;
+        free(demangled);
+        return res;
+    }
+    return name;
+#endif
+}
+} // namespace utils
+
+using AdviceCallback = std::function<void(const HttpResponsePtr &)>;
+using AdviceChainCallback = std::function<void()>;
+using PreRoutingAdvice = std::function<void(const HttpRequestPtr &, AdviceCallback &&, AdviceChainCallback &&)>;
+using PostHandlingAdvice = std::function<void(const HttpRequestPtr &, const HttpResponsePtr &)>;
+
+struct RouteEntry {
+    std::string path;
+    HttpMethod method;
+    std::vector<std::string> filters;
+    std::function<void(const HttpRequestPtr &, std::function<void(const HttpResponsePtr &)> &&, const std::vector<std::string> &)> handler;
+};
 
 class HttpAppFramework {
 public:
@@ -54,39 +88,49 @@ public:
     }
 
     HttpAppFramework &setThreadNum(size_t threads) {
-        threads_ = (threads == 0) ? 1 : threads;
+        threads_ = threads > 0 ? threads : 1;
         return *this;
     }
 
-    HttpAppFramework &setLogLevel(int level) {
-        logLevel_ = level;
+    HttpAppFramework &setLogLevel(trantor::Logger::LogLevel level) {
+        logLevel_ = static_cast<int>(level);
         return *this;
+    }
+
+    HttpAppFramework &registerPreRoutingAdvice(PreRoutingAdvice &&advice) {
+        preRoutingAdvices_.push_back(std::move(advice));
+        return *this;
+    }
+
+    HttpAppFramework &registerPostHandlingAdvice(PostHandlingAdvice &&advice) {
+        postHandlingAdvices_.push_back(std::move(advice));
+        return *this;
+    }
+
+    static void registerFilterCreator(const std::string &name, std::function<std::shared_ptr<HttpFilterBase>()> creator) {
+        instance().filterCreators_[name] = creator;
+        size_t lastColon = name.rfind("::");
+        if (lastColon != std::string::npos) {
+            instance().filterCreators_[name.substr(lastColon + 2)] = creator;
+        }
     }
 
     void addRoute(const RouteEntry &entry) {
-        std::lock_guard<std::mutex> lock(routesMutex_);
         routes_.push_back(entry);
     }
 
-    void registerFilter(const std::string &name, std::shared_ptr<HttpFilterBase> filter) {
-        std::lock_guard<std::mutex> lock(filterMutex_);
-        filters_[name] = filter;
-    }
-
     void run() {
-        running_ = true;
-
 #ifdef _WIN32
         WSADATA wsaData;
         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            std::cerr << "[Server Error] WSAStartup failed.\n";
+            std::cerr << "[Drogon] Failed to initialize Winsock.\n";
             return;
         }
 #endif
 
-        socket_t serverSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        socket_t serverSock = socket(AF_INET, SOCK_STREAM, 0);
         if (IS_INVALID_SOCKET(serverSock)) {
-            std::cerr << "[Server Error] Failed to create socket.\n";
+            std::cerr << "[Drogon] Failed to create socket.\n";
             return;
         }
 
@@ -97,38 +141,40 @@ public:
         setsockopt(serverSock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 #endif
 
-        sockaddr_in serverAddr{};
-        serverAddr.sin_family = AF_INET;
-        serverAddr.sin_port = htons(port_);
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port_);
         if (host_ == "0.0.0.0" || host_.empty()) {
-            serverAddr.sin_addr.s_addr = INADDR_ANY;
+            addr.sin_addr.s_addr = INADDR_ANY;
         } else {
-            inet_pton(AF_INET, host_.c_str(), &serverAddr.sin_addr);
+            inet_pton(AF_INET, host_.c_str(), &addr.sin_addr);
         }
 
-        if (bind(serverSock, (sockaddr *)&serverAddr, sizeof(serverAddr)) != 0) {
-            std::cerr << "[Server Error] Failed to bind to " << host_ << ":" << port_ << "\n";
+        if (bind(serverSock, (sockaddr *)&addr, sizeof(addr)) != 0) {
+            std::cerr << "[Drogon] Failed to bind to " << host_ << ":" << port_ << "\n";
             CLOSE_SOCKET(serverSock);
             return;
         }
 
         if (listen(serverSock, SOMAXCONN) != 0) {
-            std::cerr << "[Server Error] Listen failed.\n";
+            std::cerr << "[Drogon] Failed to listen on socket.\n";
             CLOSE_SOCKET(serverSock);
             return;
         }
 
-        std::cout << "[Server] Listening on http://" << host_ << ":" << port_ << "\n";
-        std::cout << "[Server] Registered " << routes_.size() << " REST API routes.\n";
+        running_ = true;
 
-        // Start worker thread pool
         for (size_t i = 0; i < threads_; ++i) {
             workers_.emplace_back(&HttpAppFramework::workerLoop, this);
         }
 
         while (running_) {
             sockaddr_in clientAddr{};
+#ifdef _WIN32
             int addrLen = sizeof(clientAddr);
+#else
+            socklen_t addrLen = sizeof(clientAddr);
+#endif
             socket_t clientSock = accept(serverSock, (sockaddr *)&clientAddr, &addrLen);
             if (IS_INVALID_SOCKET(clientSock)) {
                 if (!running_) break;
@@ -225,7 +271,6 @@ private:
     }
 
     void handleClient(socket_t sock) {
-        // Set socket receive timeout (3 seconds)
 #ifdef _WIN32
         DWORD timeout = 3000;
         setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout));
@@ -243,7 +288,6 @@ private:
         while ((bytesRead = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
             rawRequest.append(buffer, bytesRead);
             if (rawRequest.find("\r\n\r\n") != std::string::npos) {
-                // Check if Content-Length body is present
                 size_t headerEnd = rawRequest.find("\r\n\r\n");
                 std::string headerPart = rawRequest.substr(0, headerEnd);
                 size_t clPos = headerPart.find("Content-Length:");
@@ -257,7 +301,6 @@ private:
                     } catch (...) {}
                     size_t bodyReceived = rawRequest.length() - (headerEnd + 4);
                     if (bodyReceived < contentLen) {
-                        // Receive remaining body
                         while (bodyReceived < contentLen && (bytesRead = recv(sock, buffer, sizeof(buffer), 0)) > 0) {
                             rawRequest.append(buffer, bytesRead);
                             bodyReceived += bytesRead;
@@ -270,14 +313,27 @@ private:
 
         if (rawRequest.empty()) return;
 
-        // Parse Request
         auto req = parseHttpRequest(rawRequest);
         if (!req) {
             sendResponse(sock, HttpResponse::newHttpJsonResponse(Json::Value("Bad Request")), k400BadRequest);
             return;
         }
 
-        // Handle CORS Preflight OPTIONS globally
+        // Execute Pre-Routing Advices (e.g. Global CORS Preflight handling)
+        bool adviceHandled = false;
+        for (const auto &advice : preRoutingAdvices_) {
+            advice(
+                req,
+                [this, sock, req, &adviceHandled](const HttpResponsePtr &resp) {
+                    sendResponse(sock, resp, resp ? resp->getStatusCode() : k200OK, req);
+                    adviceHandled = true;
+                },
+                []() {}
+            );
+            if (adviceHandled) return;
+        }
+
+        // Handle CORS Preflight OPTIONS globally if unhandled
         if (req->method() == HttpMethod::Options) {
             std::string origin = req->getHeader("Origin");
             if (origin.empty()) origin = req->getHeader("origin");
@@ -334,7 +390,6 @@ private:
         else if (methodStr == "HEAD") req->setMethod(HttpMethod::Head);
         else req->setMethod(HttpMethod::Get);
 
-        // Separate path and query string
         size_t qPos = urlStr.find('?');
         if (qPos != std::string::npos) {
             req->setPath(urlStr.substr(0, qPos));
@@ -353,7 +408,6 @@ private:
             req->setPath(urlStr);
         }
 
-        // Parse Headers
         std::string headerLine;
         while (std::getline(stream, headerLine) && headerLine != "\r" && !headerLine.empty()) {
             if (headerLine.back() == '\r') headerLine.pop_back();
@@ -361,26 +415,24 @@ private:
             if (colon != std::string::npos) {
                 std::string k = headerLine.substr(0, colon);
                 std::string v = headerLine.substr(colon + 1);
-                while (!v.empty() && v.front() == ' ') v.erase(v.begin());
+                size_t first = v.find_first_not_of(" \t");
+                if (first != std::string::npos) v = v.substr(first);
                 req->setHeader(k, v);
             }
         }
 
-        // Body
-        size_t bodyPos = raw.find("\r\n\r\n");
-        if (bodyPos != std::string::npos) {
-            req->setBody(raw.substr(bodyPos + 4));
+        std::string body;
+        while (std::getline(stream, headerLine)) {
+            body += headerLine;
+            if (!stream.eof()) body += "\n";
         }
-
+        req->setBody(body);
         return req;
     }
 
     const RouteEntry *findRoute(HttpMethod method, const std::string &path, std::vector<std::string> &outParams) {
-        std::lock_guard<std::mutex> lock(routesMutex_);
-        
         for (const auto &route : routes_) {
             if (route.method != method) continue;
-
             if (matchPattern(route.path, path, outParams)) {
                 return &route;
             }
@@ -397,7 +449,6 @@ private:
             if (path.rfind(prefix, 0) == 0) return true;
         }
 
-        // Match parameters: /api/accounting/statement/{memberId}
         std::vector<std::string> patSegs = splitPath(pattern);
         std::vector<std::string> pathSegs = splitPath(path);
 
@@ -434,6 +485,21 @@ private:
         runNextFilter(req, route, params, currentFilterIdx, std::move(onDone));
     }
 
+    std::shared_ptr<HttpFilterBase> getOrCreateFilter(const std::string &name) {
+        std::lock_guard<std::mutex> lock(filterMutex_);
+        auto it = filters_.find(name);
+        if (it != filters_.end()) return it->second;
+
+        auto creatorIt = filterCreators_.find(name);
+        if (creatorIt != filterCreators_.end()) {
+            auto inst = creatorIt->second();
+            filters_[name] = inst;
+            return inst;
+        }
+
+        return nullptr;
+    }
+
     void runNextFilter(
         const HttpRequestPtr &req,
         const RouteEntry &route,
@@ -442,23 +508,14 @@ private:
         std::function<void(const HttpResponsePtr &)> onDone
     ) {
         if (idx >= route.filters.size()) {
-            // All filters passed -> invoke route handler
             route.handler(req, std::move(onDone), params);
             return;
         }
 
         const std::string &filterName = route.filters[idx];
-        std::shared_ptr<HttpFilterBase> filter = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(filterMutex_);
-            auto it = filters_.find(filterName);
-            if (it != filters_.end()) {
-                filter = it->second;
-            }
-        }
+        std::shared_ptr<HttpFilterBase> filter = getOrCreateFilter(filterName);
 
         if (!filter) {
-            // Filter not registered or no-op, advance to next
             runNextFilter(req, route, params, idx + 1, std::move(onDone));
             return;
         }
@@ -476,6 +533,11 @@ private:
 
     void sendResponse(socket_t sock, const HttpResponsePtr &resp, HttpStatusCode code, const HttpRequestPtr &req = nullptr) {
         if (!resp) return;
+
+        // Execute Post-Handling Advices (e.g. Global CORS headers)
+        for (const auto &advice : postHandlingAdvices_) {
+            advice(req, resp);
+        }
 
         std::string statusText = "OK";
         int statusCode = static_cast<int>(code);
@@ -498,7 +560,6 @@ private:
         std::ostringstream ss;
         ss << "HTTP/1.1 " << statusCode << " " << statusText << "\r\n";
         
-        // Ensure standard CORS headers
         bool hasCors = false;
         for (const auto &[k, v] : resp->headers()) {
             if (k == "Access-Control-Allow-Origin") hasCors = true;
@@ -528,13 +589,13 @@ private:
             if (str[i] == '+') {
                 result += ' ';
             } else if (str[i] == '%' && i + 2 < str.length()) {
-                int val = 0;
+                int value = 0;
                 std::istringstream is(str.substr(i + 1, 2));
-                if (is >> std::hex >> val) {
-                    result += static_cast<char>(val);
+                if (is >> std::hex >> value) {
+                    result += static_cast<char>(value);
                     i += 2;
                 } else {
-                    result += str[i];
+                    result += '%';
                 }
             } else {
                 result += str[i];
@@ -550,15 +611,17 @@ private:
     std::atomic<bool> running_;
 
     std::vector<RouteEntry> routes_;
-    std::mutex routesMutex_;
-
-    std::unordered_map<std::string, std::shared_ptr<HttpFilterBase>> filters_;
     std::mutex filterMutex_;
+    std::unordered_map<std::string, std::shared_ptr<HttpFilterBase>> filters_;
+    std::unordered_map<std::string, std::function<std::shared_ptr<HttpFilterBase>()>> filterCreators_;
 
-    std::vector<std::thread> workers_;
+    std::vector<PreRoutingAdvice> preRoutingAdvices_;
+    std::vector<PostHandlingAdvice> postHandlingAdvices_;
+
     std::queue<socket_t> clientQueue_;
     std::mutex queueMutex_;
     std::condition_variable queueCv_;
+    std::vector<std::thread> workers_;
 };
 
 inline HttpAppFramework &app() {
@@ -566,3 +629,5 @@ inline HttpAppFramework &app() {
 }
 
 } // namespace drogon
+
+#include "HttpController.h"

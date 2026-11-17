@@ -21,8 +21,8 @@ void MemberController::getMembers(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
-    std::string role = req->getAttributes()->get<std::string>("role");
+    std::string messId = req->attributes()->get<std::string>("messId");
+    std::string role = req->attributes()->get<std::string>("role");
     bool isAdmin = (role == "admin");
 
     auto members = services::MemberService::getMembers(messId);
@@ -32,7 +32,6 @@ void MemberController::getMembers(
     }
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(arr);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 
@@ -40,7 +39,7 @@ void MemberController::addMember(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
+    std::string messId = req->attributes()->get<std::string>("messId");
     auto json = req->getJsonObject();
     if (!json) {
         auto resp = drogon::HttpResponse::newHttpJsonResponse(Json::Value([]() {

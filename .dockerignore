@@ -1,0 +1,42 @@
+# Dependencies & package artifacts
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Git and IDE
+.git/
+.github/
+.vscode/
+.idea/
+
+# Web frontend builds
+dist/
+build/
+.output/
+.vercel/
+out/
+
+# C++ local build artifacts
+backend-cpp/build/
+backend-cpp/bin/
+backend-cpp/.vs/
+backend-cpp/out/
+*.obj
+*.o
+*.exe
+*.pdb
+*.ilk
+*.idb
+
+# Data and caches
+.data/
+backend-cpp/data/*.json
+!backend-cpp/data/.gitkeep
+
+# Documentation
+docs/
+
+# OS specific files
+.DS_Store
+Thumbs.db

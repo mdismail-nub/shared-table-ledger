@@ -6,7 +6,7 @@ services:
     name: shared-table-ledger-api
     runtime: docker
     dockerfilePath: ./backend-cpp/Dockerfile
-    dockerContext: ./backend-cpp
+    dockerContext: .
     plan: free
     region: singapore
     envVars:

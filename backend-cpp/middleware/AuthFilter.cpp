@@ -57,12 +57,12 @@ void AuthFilter::doFilter(
     }
 
     // Attach claims to request attributes
-    req->getAttributes()->insert("claims", *claimsOpt);
-    req->getAttributes()->insert("role", claimsOpt->role);
-    req->getAttributes()->insert("messId", claimsOpt->messId);
-    req->getAttributes()->insert("userId", claimsOpt->userId);
+    req->attributes()->insert("claims", *claimsOpt);
+    req->attributes()->insert("role", claimsOpt->role);
+    req->attributes()->insert("messId", claimsOpt->messId);
+    req->attributes()->insert("userId", claimsOpt->userId);
     if (claimsOpt->memberId.has_value()) {
-        req->getAttributes()->insert("memberId", *claimsOpt->memberId);
+        req->attributes()->insert("memberId", *claimsOpt->memberId);
     }
 
     fccb();
@@ -78,7 +78,7 @@ void AdminOnlyFilter::doFilter(
         return;
     }
 
-    if (!req->getAttributes()->find("role")) {
+    if (!req->attributes()->find("role")) {
         auto resp = drogon::HttpResponse::newHttpJsonResponse(
             Json::Value([]() {
                 Json::Value v;
@@ -91,7 +91,7 @@ void AdminOnlyFilter::doFilter(
         return;
     }
 
-    std::string role = req->getAttributes()->get<std::string>("role");
+    std::string role = req->attributes()->get<std::string>("role");
     if (role != "admin") {
         auto resp = drogon::HttpResponse::newHttpJsonResponse(
             Json::Value([]() {

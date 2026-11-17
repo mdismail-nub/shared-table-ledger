@@ -22,13 +22,13 @@ void NotificationController::getNotifications(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
-    std::string role = req->getAttributes()->get<std::string>("role");
+    std::string messId = req->attributes()->get<std::string>("messId");
+    std::string role = req->attributes()->get<std::string>("role");
     bool isAdmin = (role == "admin");
 
     std::optional<std::string> memberId;
-    if (req->getAttributes()->find("memberId")) {
-        memberId = req->getAttributes()->get<std::string>("memberId");
+    if (req->attributes()->find("memberId")) {
+        memberId = req->attributes()->get<std::string>("memberId");
     }
 
     auto notifs = repositories::DatabaseManager::instance().getNotifications(messId, memberId, isAdmin);
@@ -36,7 +36,6 @@ void NotificationController::getNotifications(
     for (const auto &n : notifs) arr.append(n.toJson());
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(arr);
-    resp->addHeader("Access-Control-Allow-Origin", "*");
     callback(resp);
 }
 
@@ -44,8 +43,8 @@ void NotificationController::sendNotification(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback
 ) {
-    std::string messId = req->getAttributes()->get<std::string>("messId");
-    std::string role = req->getAttributes()->get<std::string>("role");
+    std::string messId = req->attributes()->get<std::string>("messId");
+    std::string role = req->attributes()->get<std::string>("role");
     bool isAdmin = (role == "admin");
 
     auto json = req->getJsonObject();
@@ -63,8 +62,8 @@ void NotificationController::sendNotification(
     std::string type = json->isMember("type") ? (*json)["type"].asString() : "notice";
 
     std::optional<std::string> senderId;
-    if (req->getAttributes()->find("memberId")) {
-        senderId = req->getAttributes()->get<std::string>("memberId");
+    if (req->attributes()->find("memberId")) {
+        senderId = req->attributes()->get<std::string>("memberId");
     }
 
     std::optional<std::string> recipientId;

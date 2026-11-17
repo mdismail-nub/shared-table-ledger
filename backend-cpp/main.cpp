@@ -178,10 +178,41 @@ int main(int argc, char *argv[]) {
         .setThreadNum(threads)
         .setLogLevel(trantorLogLevel);
 
-    // Register Middleware Filters
-    drogon::app().registerFilter("mess_manager::middleware::CorsFilter", std::make_shared<mess_manager::middleware::CorsFilter>());
-    drogon::app().registerFilter("mess_manager::middleware::AuthFilter", std::make_shared<mess_manager::middleware::AuthFilter>());
-    drogon::app().registerFilter("mess_manager::middleware::AdminOnlyFilter", std::make_shared<mess_manager::middleware::AdminOnlyFilter>());
+    // Register Drogon Advice for universal CORS handling
+    drogon::app().registerPreRoutingAdvice([](const drogon::HttpRequestPtr &req, drogon::AdviceCallback &&acb, drogon::AdviceChainCallback &&accb) {
+        if (req->method() == drogon::HttpMethod::Options) {
+            std::string origin = req->getHeader("Origin");
+            if (origin.empty()) origin = req->getHeader("origin");
+            std::string resolved = mess_manager::middleware::CorsFilter::resolveOrigin(origin);
+
+            auto resp = drogon::HttpResponse::newHttpResponse();
+            resp->setStatusCode(drogon::k204NoContent);
+            resp->addHeader("Access-Control-Allow-Origin", resolved);
+            resp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+            resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Guest-Token, X-Requested-With, Accept");
+            if (resolved != "*") {
+                resp->addHeader("Access-Control-Allow-Credentials", "true");
+            }
+            resp->addHeader("Access-Control-Max-Age", "86400");
+            acb(resp);
+            return;
+        }
+        accb();
+    });
+
+    drogon::app().registerPostHandlingAdvice([](const drogon::HttpRequestPtr &req, const drogon::HttpResponsePtr &resp) {
+        if (!resp || !req) return;
+        std::string origin = req->getHeader("Origin");
+        if (origin.empty()) origin = req->getHeader("origin");
+        std::string resolved = mess_manager::middleware::CorsFilter::resolveOrigin(origin);
+
+        resp->addHeader("Access-Control-Allow-Origin", resolved);
+        resp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+        resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Guest-Token, X-Requested-With, Accept");
+        if (resolved != "*") {
+            resp->addHeader("Access-Control-Allow-Credentials", "true");
+        }
+    });
 
     std::cout << "[Server] Listening on http://" << host << ":" << port << "\n";
     std::cout << "[Server] Ready to accept API requests from React frontend.\n";
