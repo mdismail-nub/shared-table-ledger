@@ -10,6 +10,8 @@
 FROM ubuntu:22.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV CMAKE_BUILD_PARALLEL_LEVEL=1
+ENV MAKEFLAGS="-j1"
 
 # Install C++ build toolchain, libpq-dev, OpenSSL, and Drogon dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -35,7 +37,7 @@ RUN git clone --depth 1 --branch v1.9.8 https://github.com/drogonframework/drogo
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_CTL=OFF \
         -DBUILD_TESTING=OFF \
-    && cmake --build build -j1 \
+    && cmake --build build --parallel 1 \
     && cmake --install build \
     && rm -rf /tmp/drogon
 

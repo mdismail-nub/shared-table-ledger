@@ -1,11 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
-project(mess_manager_backend VERSION 1.0.0 LANGUAGES CXX)
+
+project(mess_manager_backend
+    VERSION 1.0.0
+    LANGUAGES CXX
+)
+
+# ==================================================
+# C++ CONFIGURATION
+# ==================================================
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Compiler optimization and warnings
 if(MSVC)
     add_compile_options(/W4 /utf-8)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
@@ -13,51 +20,92 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# Find PostgreSQL libpq (Linux/Docker and systems with libpq installed)
+include(FetchContent)
+
+# ==================================================
+# POSTGRESQL
+# ==================================================
+
 find_package(PostgreSQL QUIET)
 if(PostgreSQL_FOUND)
-    message(STATUS "PostgreSQL libpq found: ${PostgreSQL_LIBRARIES}")
+    message(STATUS "PostgreSQL found: ${PostgreSQL_LIBRARIES}")
     add_compile_definitions(HAVE_LIBPQ=1)
-    include_directories(${PostgreSQL_INCLUDE_DIRS})
-    set(PG_LINK_LIBS ${PostgreSQL_LIBRARIES})
+    if(TARGET PostgreSQL::PostgreSQL)
+        set(PG_LINK_TARGET PostgreSQL::PostgreSQL)
+    else()
+        include_directories(${PostgreSQL_INCLUDE_DIRS})
+        set(PG_LINK_TARGET ${PostgreSQL_LIBRARIES})
+    endif()
 else()
-    message(STATUS "PostgreSQL libpq not found on host. Local builds will use in-memory store.")
-    set(PG_LINK_LIBS "")
+    message(STATUS "PostgreSQL not found on host. Local builds will use standalone store.")
+    set(PG_LINK_TARGET "")
 endif()
 
-# Find Drogon (optional in environment with Drogon installed)
-find_package(Drogon QUIET)
-if(Drogon_FOUND)
-    message(STATUS "Drogon found: ${Drogon_DIR}")
+# ==================================================
+# REAL DROGON FRAMEWORK
+# ==================================================
+
+find_package(Drogon CONFIG QUIET)
+if(Drogon_FOUND AND TARGET Drogon::Drogon)
+    message(STATUS "Real Drogon found: ${Drogon_DIR}")
     add_compile_definitions(HAVE_DROGON=1)
-    set(DROGON_LINK_LIBS Drogon::Drogon)
+    set(DROGON_LINK_TARGET Drogon::Drogon)
     set(DROGON_COMPAT_INCLUDE_DIRS "")
 else()
-    message(STATUS "Drogon not installed globally. Using embedded Drogon-compatible framework.")
-    set(DROGON_LINK_LIBS "")
+    message(STATUS "Real Drogon not installed. Using embedded Drogon-compatible layer.")
+    set(DROGON_LINK_TARGET "")
     set(DROGON_COMPAT_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include/drogon_compat)
 endif()
 
-include(FetchContent)
+# ==================================================
+# JSONCPP
+# ==================================================
 
-# 1. JsonCpp dependency (Found locally or fetched automatically)
-find_package(jsoncpp QUIET)
-if(NOT jsoncpp_FOUND)
-    message(STATUS "Fetching JsonCpp...")
+find_package(jsoncpp CONFIG QUIET)
+
+if(TARGET JsonCpp::JsonCpp)
+    set(JSONCPP_TARGET JsonCpp::JsonCpp)
+    message(STATUS "Using JsonCpp::JsonCpp")
+elseif(TARGET jsoncpp_lib)
+    set(JSONCPP_TARGET jsoncpp_lib)
+    message(STATUS "Using jsoncpp_lib")
+elseif(TARGET jsoncpp_static)
+    set(JSONCPP_TARGET jsoncpp_static)
+    message(STATUS "Using jsoncpp_static")
+else()
+    message(STATUS "System JsonCpp unavailable. Fetching JsonCpp 1.9.5.")
     FetchContent_Declare(
         jsoncpp
         GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
         GIT_TAG 1.9.5
+        GIT_SHALLOW TRUE
     )
     set(JSONCPP_WITH_TESTS OFF CACHE BOOL "" FORCE)
     set(JSONCPP_WITH_POST_BUILD_UNITTEST OFF CACHE BOOL "" FORCE)
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(jsoncpp)
+
+    if(TARGET JsonCpp::JsonCpp)
+        set(JSONCPP_TARGET JsonCpp::JsonCpp)
+    elseif(TARGET jsoncpp_static)
+        set(JSONCPP_TARGET jsoncpp_static)
+    elseif(TARGET jsoncpp_lib)
+        set(JSONCPP_TARGET jsoncpp_lib)
+    else()
+        message(FATAL_ERROR "No usable JsonCpp target was found.")
+    endif()
 endif()
 
-# Include directories
-include_directories(
+# ==================================================
+# COMMON INCLUDE DIRECTORIES
+# IMPORTANT:
+# Do not add the local include/ directory here.
+# It contains compatibility Drogon headers that
+# would shadow the real installed Drogon headers.
+# ==================================================
+
+set(COMMON_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${DROGON_COMPAT_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/models
@@ -69,7 +117,10 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/controllers
 )
 
-# Common Core Sources (Shared by Server and Test Runner)
+# ==================================================
+# COMMON SOURCE FILES
+# ==================================================
+
 set(CORE_SOURCES
     utils/Crypto.cpp
     utils/JwtHelper.cpp
@@ -84,19 +135,34 @@ set(CORE_SOURCES
     repositories/DatabaseManager.cpp
 )
 
-# 1. Automated Test Executable (Standalone zero-dependency test runner)
+# ==================================================
+# TEST EXECUTABLE
+# ==================================================
+
 add_executable(mess_manager_tests
     tests/AccountingEngineTest.cpp
     ${CORE_SOURCES}
 )
 
+target_include_directories(mess_manager_tests PRIVATE
+    ${COMMON_INCLUDE_DIRS}
+)
+
+target_link_libraries(mess_manager_tests PRIVATE
+    ${JSONCPP_TARGET}
+    ${PG_LINK_TARGET}
+)
+
 if(WIN32)
-    target_link_libraries(mess_manager_tests PRIVATE jsoncpp_static ws2_32 ${PG_LINK_LIBS})
+    target_link_libraries(mess_manager_tests PRIVATE ws2_32)
 else()
-    target_link_libraries(mess_manager_tests PRIVATE jsoncpp_static pthread ${PG_LINK_LIBS})
+    target_link_libraries(mess_manager_tests PRIVATE pthread)
 endif()
 
-# 2. Main C++ Server Executable
+# ==================================================
+# PRODUCTION SERVER
+# ==================================================
+
 set(SERVER_SOURCES
     main.cpp
     ${CORE_SOURCES}
@@ -115,13 +181,45 @@ set(SERVER_SOURCES
     controllers/HealthController.cpp
 )
 
-add_executable(mess_manager_server ${SERVER_SOURCES})
+add_executable(mess_manager_server
+    ${SERVER_SOURCES}
+)
+
+target_include_directories(mess_manager_server PRIVATE
+    ${COMMON_INCLUDE_DIRS}
+)
+
+target_link_libraries(mess_manager_server PRIVATE
+    ${DROGON_LINK_TARGET}
+    ${JSONCPP_TARGET}
+    ${PG_LINK_TARGET}
+)
+
 if(WIN32)
-    target_link_libraries(mess_manager_server PRIVATE jsoncpp_static ws2_32 ${PG_LINK_LIBS} ${DROGON_LINK_LIBS})
+    target_link_libraries(mess_manager_server PRIVATE ws2_32)
 else()
-    target_link_libraries(mess_manager_server PRIVATE jsoncpp_static pthread ${PG_LINK_LIBS} ${DROGON_LINK_LIBS})
+    target_link_libraries(mess_manager_server PRIVATE pthread)
 endif()
 
-# Enable CTest
+# ==================================================
+# TESTING
+# ==================================================
+
 enable_testing()
-add_test(NAME AccountingEngineUnitTests COMMAND mess_manager_tests)
+
+add_test(
+    NAME AccountingEngineUnitTests
+    COMMAND mess_manager_tests
+)
+
+# ==================================================
+# BUILD INFORMATION
+# ==================================================
+
+message(STATUS "======================================")
+message(STATUS "Mess Manager Backend Configuration")
+message(STATUS "C++ Standard: C++17")
+message(STATUS "JSONCpp target: ${JSONCPP_TARGET}")
+message(STATUS "Production server: mess_manager_server")
+message(STATUS "Test executable: mess_manager_tests")
+message(STATUS "======================================")
