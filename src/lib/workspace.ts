@@ -14,7 +14,7 @@ import {
   type NotificationItem,
 } from "./data";
 import { buildLedger, mealRate } from "./accounting";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { getAdminSession, getMessDataById, getMessDataByCode, saveStoredMess } from "./mess-store";
 import { loadWorkspaceByCodeFn, loadWorkspaceByIdFn } from "./mess.functions";
 import { cacheWorkspaceToIndexedDB, getCachedWorkspaceFromIndexedDB } from "./offline-db";
@@ -128,35 +128,6 @@ export const workspaceOptions = (month = currentMonth()) =>
         );
         if (cachedWs) {
           return cachedWs;
-        }
-
-        try {
-          const { data, error } = await db.rpc("get_workspace_by_invite_code", {
-            invite_code: memberSession.code,
-            p_month: month,
-          });
-          if (!error && data) {
-            const res = data as unknown as WorkspacePayload;
-            return {
-              mess: res.mess,
-              members: (res.members ?? []) as Member[],
-              isAdmin: false,
-              meals: (res.meals ?? []) as Meal[],
-              expenses: (res.expenses ?? []) as Expense[],
-              payments: (res.payments ?? []) as Payment[],
-              summary: res.summary ?? {
-                food: 0,
-                household: 0,
-                total_meals: 0,
-                deposits: 0,
-                active_members: 0,
-              },
-              notifications: (res.notifications ?? []) as NotificationItem[],
-              userId: memberSession.memberId,
-            };
-          }
-        } catch {
-          // Fall through
         }
 
         // Safe fallback for memberSession to prevent crashes on network hiccups
@@ -354,27 +325,29 @@ export const workspaceOptions = (month = currentMonth()) =>
         };
       }
 
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (user) {
-          try {
-            const res = (await loadWorkspace({ data: { month } })) as unknown as WorkspacePayload;
-            if (res?.mess) {
-              cacheWorkspaceToIndexedDB(res.mess.id, month, res).catch(() => {});
-              return res;
+      if (isSupabaseConfigured()) {
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (user) {
+            try {
+              const res = (await loadWorkspace({ data: { month } })) as unknown as WorkspacePayload;
+              if (res?.mess) {
+                cacheWorkspaceToIndexedDB(res.mess.id, month, res).catch(() => {});
+                return res;
+              }
+            } catch {
+              const cachedUserWs = await getCachedWorkspaceFromIndexedDB<WorkspacePayload>(
+                user.id,
+                month,
+              );
+              if (cachedUserWs) return cachedUserWs;
             }
-          } catch {
-            const cachedUserWs = await getCachedWorkspaceFromIndexedDB<WorkspacePayload>(
-              user.id,
-              month,
-            );
-            if (cachedUserWs) return cachedUserWs;
           }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
       }
 
       if (typeof window !== "undefined") {

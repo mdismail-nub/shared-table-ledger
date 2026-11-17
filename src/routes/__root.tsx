@@ -13,7 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/app/shell";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
 import { registerPwaServiceWorker } from "@/lib/pwa";
 import { registerBackgroundSync } from "@/lib/offline-sync";
@@ -139,6 +139,7 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
+    if (!isSupabaseConfigured()) return;
     let unsubscribe: (() => void) | undefined;
     try {
       const { data } = supabase.auth.onAuthStateChange((event) => {

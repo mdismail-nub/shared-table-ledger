@@ -20,10 +20,30 @@ function serverSupabaseUrl(publicUrl: string, supabaseKey: string): string | und
   return serverUrl;
 }
 
+export function isSupabaseConfigured(): boolean {
+  const url =
+    (typeof import.meta !== "undefined" && import.meta.env?.["VITE_SUPABASE_URL"]) ||
+    (typeof process !== "undefined" && process.env?.["SUPABASE_URL"]);
+  return !!url && !url.includes("placeholder.supabase.co");
+}
+
 function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof fetch {
+  const isPlaceholder = !supabaseUrl || supabaseUrl.includes("placeholder.supabase.co");
   const publicUrl = supabaseUrl.replace(/\/+$/, "");
   const serverUrl = serverSupabaseUrl(publicUrl, supabaseKey);
   return (input, init) => {
+    if (isPlaceholder) {
+      // Do not attempt network calls to non-existent placeholder domains
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ data: null, error: { message: "Supabase not configured; using C++ Drogon backend." } }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }
+        )
+      );
+    }
     const headers = new Headers(
       typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
     );

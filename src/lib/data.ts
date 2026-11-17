@@ -1,7 +1,8 @@
 import { createContext, useContext } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
+import { cppApi } from "./api-client";
 import { buildLedger, mealRate } from "./accounting";
 import type { Tone } from "@/components/app/ui";
 import {
@@ -313,21 +314,39 @@ export function useInviteCode() {
     queryKey: ["invite"],
     queryFn: async () => {
       const adminSession = getAdminSession();
+      if (adminSession?.inviteCode) {
+        return adminSession.inviteCode;
+      }
       if (adminSession) {
+        if (cppApi.isAvailable()) {
+          try {
+            const cppRes = await cppApi.settings.getInviteCode();
+            if (cppRes.data?.code) {
+              return cppRes.data.code;
+            }
+          } catch {
+            // ignore
+          }
+        }
         const data = getMessDataById(adminSession.messId, currentMonth());
         const code = (data?.mess as unknown as { invite_code?: string })?.invite_code;
         if (code) return code;
       }
       const memberSession = getMemberSession();
       if (memberSession?.code) {
-        const data = getMessDataByCode(memberSession.code, currentMonth());
-        const code =
-          (data?.mess as unknown as { invite_code?: string })?.invite_code || memberSession.code;
-        if (code) return code;
+        return memberSession.code;
       }
-      const { data, error } = await supabase.rpc("mess_invite_code");
-      if (error) return null;
-      return (data as string | null) ?? null;
+      if (cppApi.isAvailable()) {
+        try {
+          const cppRes = await cppApi.settings.getInviteCode();
+          if (cppRes.data?.code) {
+            return cppRes.data.code;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      return null;
     },
   });
 }
@@ -1013,10 +1032,33 @@ const storeDb = {
     const admin = getAdminSession();
     if (admin) {
       if (fn === "regenerate_invite_code") {
+        if (cppApi.isAvailable()) {
+          try {
+            const cppRes = await cppApi.settings.regenerateCode();
+            if (cppRes.data?.code) {
+              return { data: cppRes.data.code, error: null };
+            }
+          } catch {
+            // ignore
+          }
+        }
         const newCode = regenerateInviteCodeInStore(admin.messId);
         return { data: newCode, error: null };
       }
       if (fn === "mess_invite_code") {
+        if (admin.inviteCode) {
+          return { data: admin.inviteCode, error: null };
+        }
+        if (cppApi.isAvailable()) {
+          try {
+            const cppRes = await cppApi.settings.getInviteCode();
+            if (cppRes.data?.code) {
+              return { data: cppRes.data.code, error: null };
+            }
+          } catch {
+            // ignore
+          }
+        }
         const data = getMessDataById(admin.messId, currentMonth());
         const code = (data?.mess as AnyData)?.invite_code;
         return { data: code || null, error: null };
@@ -1026,7 +1068,17 @@ const storeDb = {
         return { data: data?.summary || null, error: null };
       }
     }
-    return (supabase.rpc as AnyData)(fn, args);
+    if (fn === "mess_invite_code") {
+      const member = getMemberSession();
+      if (member?.code) {
+        return { data: member.code, error: null };
+      }
+      return { data: null, error: null };
+    }
+    if (isSupabaseConfigured()) {
+      return (supabase.rpc as AnyData)(fn, args);
+    }
+    return { data: null, error: null };
   },
 };
 

@@ -29,6 +29,7 @@ import {
 } from "@/lib/mess-store";
 import { lookupMessByCodeFn, createMessFn } from "@/lib/mess.functions";
 import { createMessInviteLink } from "@/lib/invite";
+import { cppApi } from "@/lib/api-client";
 import welcome from "@/assets/onboard-welcome.png";
 import admin from "@/assets/role-admin.png";
 import member from "@/assets/role-member.png";
@@ -78,7 +79,49 @@ function Welcome() {
     }
     setVerifying(true);
     try {
-      // 1. Try server function (works across all browsers, incognito, and devices!)
+      // 1. Try C++ Drogon REST Backend first (production architecture)
+      if (cppApi.isAvailable()) {
+        try {
+          const cppRes = await cppApi.workspace.previewMess(clean);
+          if (cppRes.data && !cppRes.error) {
+            const preview = cppRes.data;
+            const info: MessLookupResult = {
+              id: preview.id,
+              name: preview.name,
+              manager: preview.manager,
+              address: preview.address,
+              currency: preview.currency,
+              meal_categories: (preview as unknown as MessLookupResult).meal_categories || [
+                "Rice", "Vegetables", "Fish & meat", "Eggs", "Cooking oil", "Spices", "Other food"
+              ],
+              household_categories: (preview as unknown as MessLookupResult).household_categories || [
+                "Wi-Fi", "Electricity", "Gas", "Water", "Cleaning", "Other household"
+              ],
+              members: (preview.members || []).map((m) => ({
+                id: m.id,
+                name: m.name,
+                room: m.room,
+                tone: m.tone,
+                role: m.role,
+                status: m.status,
+              })),
+            };
+            setMessInfo(info);
+            if (info.members && info.members.length > 0 && info.members[0]) {
+              setSelectedMemberId(info.members[0].id);
+            } else {
+              setSelectedMemberId("");
+            }
+            toast.success(`Mess found: ${info.name}`);
+            setVerifying(false);
+            return;
+          }
+        } catch {
+          // Fall back to server function / local store
+        }
+      }
+
+      // 2. Try server function (works across all browsers, incognito, and devices!)
       try {
         const sRes = await lookupMessByCodeFn({ data: { code: clean } });
         if (sRes) {
@@ -113,7 +156,7 @@ function Welcome() {
         // Fall back to local check
       }
 
-      // 2. Check local mess store fallback
+      // 3. Check local mess store fallback
       const local = findMessByInviteCode(clean);
       if (local) {
         const info: MessLookupResult = {
@@ -142,27 +185,6 @@ function Welcome() {
         toast.success(`Mess found: ${info.name}`);
         setVerifying(false);
         return;
-      }
-
-      // 3. Fallback to Supabase RPC
-      try {
-        const { data, error } = await db.rpc("get_mess_by_invite_code", {
-          invite_code: clean,
-        });
-        if (!error && data) {
-          const info = data as unknown as MessLookupResult;
-          setMessInfo(info);
-          if (info.members && info.members.length > 0 && info.members[0]) {
-            setSelectedMemberId(info.members[0].id);
-          } else {
-            setSelectedMemberId("");
-          }
-          toast.success(`Mess found: ${info.name}`);
-          setVerifying(false);
-          return;
-        }
-      } catch {
-        // Fall through
       }
 
       setMessInfo(null);
@@ -408,12 +430,15 @@ function Welcome() {
           memberName: selectedMember ? selectedMember.name : "Guest Member",
         });
 
-        // If user happens to be signed in to Supabase, also link their account
-        if (me.data?.user && !me.data.isGuestMember) {
+        // Create guest session on C++ Drogon backend if available
+        if (cppApi.isAvailable()) {
           try {
-            await db.rpc("join_mess_by_code", { _code: cleanCode });
+            await cppApi.auth.createGuestSession({
+              code: cleanCode,
+              ...(selectedMember ? { memberId: selectedMember.id } : {}),
+            });
           } catch {
-            // Ignore if join RPC fails for guest
+            // Ignore if guest session creation fails
           }
         }
 

@@ -113,6 +113,41 @@ void SettingsController::updateSettings(
     callback(resp);
 }
 
+void SettingsController::getInviteCode(
+    const drogon::HttpRequestPtr &req,
+    std::function<void(const drogon::HttpResponsePtr &)> &&callback
+) {
+    std::string messId = req->attributes()->get<std::string>("messId");
+    std::string role = req->attributes()->get<std::string>("role");
+
+    auto &db = repositories::DatabaseManager::instance();
+    auto messOpt = db.getMessById(messId);
+    if (!messOpt.has_value()) {
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(Json::Value([]() {
+            Json::Value v; v["error"] = "Mess record not found"; return v;
+        }()));
+        resp->setStatusCode(drogon::k404NotFound);
+        callback(resp);
+        return;
+    }
+
+    if (role != "admin" && !messOpt->showInviteToMembers) {
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(Json::Value([]() {
+            Json::Value v; v["error"] = "Invite code visibility is restricted by administrator"; return v;
+        }()));
+        resp->setStatusCode(drogon::k403Forbidden);
+        callback(resp);
+        return;
+    }
+
+    Json::Value val;
+    val["success"] = true;
+    val["code"] = messOpt->inviteCode;
+    val["show_invite_to_members"] = messOpt->showInviteToMembers;
+    auto resp = drogon::HttpResponse::newHttpJsonResponse(val);
+    callback(resp);
+}
+
 void SettingsController::regenerateCode(
     const drogon::HttpRequestPtr &req,
     std::function<void(const drogon::HttpResponsePtr &)> &&callback

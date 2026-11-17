@@ -9,6 +9,7 @@
 #include "../utils/JwtHelper.h"
 #include "../utils/CsvHelper.h"
 #include "../validators/InputValidator.h"
+#include "../repositories/DatabaseManager.h"
 
 using namespace mess_manager;
 
@@ -273,6 +274,71 @@ void testAccountingEdgeCases() {
     TEST_ASSERT(doubleEquals(bal.balance, -632.05, 0.01), "Negative balance precision check");
 }
 
+void testInviteCodeManagement() {
+    std::cout << "\n--- Testing Invite Code Management & Persistence ---\n";
+
+    // 1. Generation format check: must be 6 digits
+    std::string code1 = utils::Crypto::generateInviteCode();
+    TEST_ASSERT(code1.length() == 6, "Generated invite code length is exactly 6");
+    bool allDigits = true;
+    for (char c : code1) {
+        if (!std::isdigit(static_cast<unsigned char>(c))) allDigits = false;
+    }
+    TEST_ASSERT(allDigits, "Generated invite code consists only of numeric digits [0-9]");
+
+    // 2. Format validation rules
+    auto validErr = validators::InputValidator::validateInviteCode(code1);
+    TEST_ASSERT(!validErr.has_value(), "Valid 6-digit generated code passes validator");
+
+    auto shortErr = validators::InputValidator::validateInviteCode("12345");
+    TEST_ASSERT(shortErr.has_value(), "Short 5-digit code rejected");
+
+    auto longErr = validators::InputValidator::validateInviteCode("1234567");
+    TEST_ASSERT(longErr.has_value(), "Long 7-digit code rejected");
+
+    auto alphaErr = validators::InputValidator::validateInviteCode("12345a");
+    TEST_ASSERT(alphaErr.has_value(), "Alphanumeric code rejected");
+
+    auto emptyErr = validators::InputValidator::validateInviteCode("");
+    TEST_ASSERT(emptyErr.has_value(), "Empty code rejected");
+
+    // 3. Database operations: associate with mess, lookup, and regenerate
+    auto &db = repositories::DatabaseManager::instance();
+    db.init("", ""); // Standalone memory mode for tests
+
+    models::Mess testMess;
+    testMess.id = "test-mess-invite-uuid";
+    testMess.ownerId = "test-owner-uuid";
+    testMess.name = "Test Invite Mess";
+    testMess.manager = "Manager";
+    testMess.inviteCode = "889900";
+    testMess.showInviteToMembers = true;
+
+    bool created = db.createMess(testMess);
+    TEST_ASSERT(created, "Test mess created with invite code 889900");
+
+    auto found = db.getMessByInviteCode("889900");
+    TEST_ASSERT(found.has_value(), "Found mess by initial invite code 889900");
+    TEST_ASSERT(found->name == "Test Invite Mess", "Mess name matches retrieved record");
+
+    // Non-existent code returns nullopt
+    auto notFound = db.getMessByInviteCode("000000");
+    TEST_ASSERT(!notFound.has_value(), "Non-existent invite code returns nullopt safely");
+
+    // Regenerate code
+    bool regenOk = db.regenerateInviteCode("test-mess-invite-uuid", "112233");
+    TEST_ASSERT(regenOk, "Invite code regenerated to 112233");
+
+    // Old code no longer resolves
+    auto oldFound = db.getMessByInviteCode("889900");
+    TEST_ASSERT(!oldFound.has_value(), "Old invite code 889900 no longer resolves");
+
+    // New code resolves
+    auto newFound = db.getMessByInviteCode("112233");
+    TEST_ASSERT(newFound.has_value(), "New invite code 112233 resolves successfully");
+    TEST_ASSERT(newFound->id == "test-mess-invite-uuid", "New invite code maps to original mess id");
+}
+
 int main() {
     std::cout << "========================================================\n";
     std::cout << "  Shared Table Ledger — C++ Backend Automated Tests     \n";
@@ -286,6 +352,7 @@ int main() {
     testJwtAndCryptography();
     testValidationRules();
     testAccountingEdgeCases();
+    testInviteCodeManagement();
 
     std::cout << "\n========================================================\n";
     std::cout << "  ALL C++ UNIT TESTS PASSED SUCCESSFULLY! (100% GREEN)  \n";

@@ -223,7 +223,7 @@ export const cppApi = {
                 body: JSON.stringify(credentials),
             });
         },
-        async createGuestSession(data: { code: string; memberId?: string }) {
+        async createGuestSession(data: { code: string; memberId?: string | undefined }) {
             return request<{
                 token: string;
                 mess_id: string;
@@ -411,6 +411,12 @@ export const cppApi = {
             return request<{ success: boolean; code: string }>("/api/settings/regenerate-code", {
                 method: "POST",
             });
+        },
+        async getInviteCode() {
+            return request<{ success: boolean; code: string; show_invite_to_members?: boolean }>(
+                "/api/settings/invite-code",
+                { method: "GET" }
+            );
         },
     },
 };
